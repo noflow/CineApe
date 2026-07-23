@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Show, SignInButton, SignUpButton, UserButton, useUser } from "@clerk/nextjs";
 
 type Page = "Home" | "Discover" | "For You" | "Friends & Groups" | "My Profile" | "Title";
 const titles = [
@@ -62,8 +63,25 @@ export default function Home() {
 
     {page === "My Profile" && <section className="page"><div className="panel profile-head"><Avatar>SB</Avatar><div><h1>Shawn Baker</h1><p>Drama seeker · 38 ratings · Member since 2025</p></div><div className="profile-stats"><b>87%<span>Circle match</span></b><b>26<span>Recommendations sent</span></b><b>8.4<span>Average rating</span></b></div></div><div className="profile-grid"><div className="panel taste"><h2>Your taste profile</h2><p>Built from what you watch, rate, and save.</p>{[["Drama", "93"], ["Sci-fi", "84"], ["Comedy", "71"], ["Thriller", "67"], ["Horror", "33"]].map(([name, value]) => <div className="bar-row" key={name}><span>{name}</span><i><b style={{width:`${value}%`}}></b></i><strong>{value}</strong></div>)}</div><div className="panel accuracy"><h2>Recommendation accuracy</h2><p>Who knows your taste best?</p><Friend name="Maya Reynolds" initials="MR" match="92%"/><Friend name="John Baker" initials="JB" match="87%" tone="blue-tone"/><Friend name="Sarah Kim" initials="SK" match="81%" tone="rose-tone"/></div></div></section>}
     </main>
+    <div className="auth-float"><AccountControls /></div>
     {modal && <div className="backdrop" onClick={() => setModal(null)}><div className="modal" onClick={e => e.stopPropagation()}><button className="close" onClick={() => setModal(null)}>×</button>{modal === "recommend" ? <><h2>Send a recommendation</h2><p>Make it personal. Great picks deserve a note.</p><div className="selected-title"><span></span><b>Mickey 17<small>2025 · Science fiction</small></b></div><label>SEND TO</label><div className="recipients">{["Maya", "John", "Sarah"].map(name => <button className={recipient === name ? "chosen" : ""} key={name} onClick={() => setRecipient(name)}>{name}</button>)}</div><label>ADD A NOTE <small>(optional)</small></label><textarea placeholder="Why will they love it?"></textarea><button className="primary wide" onClick={() => {setModal(null);flash(`Recommendation sent to ${recipient} ✦`)}}>Send recommendation ✦</button></> : <><h2>How was Mickey 17?</h2><p>Your rating helps your circle recommend better.</p><label>YOUR OVERALL RATING</label><div className="recipients"><button>6</button><button>7</button><button className="chosen">8</button><button>9</button><button>10</button></div><label>HOW GOOD WAS MAYA’S RECOMMENDATION?</label><button className="rate-choice">Perfect for me ✨</button><button className="rate-choice">Pretty good</button><button className="rate-choice">Not my thing</button><button className="primary wide" onClick={() => {setModal(null);flash("Your rating was saved — Maya will love this.")}}>Save my rating</button></>}</div></div>}
     {toast && <div className="toast">{toast}</div>}
+  </div>;
+}
+function AccountControls() {
+  const { isSignedIn } = useUser();
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    void fetch("/api/account", { method: "POST" });
+  }, [isSignedIn]);
+
+  return <div className="auth-controls">
+    <Show when="signed-out">
+      <SignInButton><button className="sign-in">Sign in</button></SignInButton>
+      <SignUpButton><button className="join-circle">Join free</button></SignUpButton>
+    </Show>
+    <Show when="signed-in"><UserButton appearance={{ elements: { avatarBox: "user-avatar" } }} /></Show>
   </div>;
 }
 function Intro({label,title,text,action}:{label:string,title:string,text:string,action:React.ReactNode}) { return <div className="intro"><div><p className="eyebrow">{label}</p><h1>{title}</h1><p>{text}</p></div>{action}</div>; }

@@ -10,6 +10,7 @@ export const recommendationStatus = pgEnum("recommendation_status", ["pending", 
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
+  clerkUserId: text("clerk_user_id").notNull().unique(),
   email: text("email").notNull().unique(),
   displayName: text("display_name").notNull(),
   avatarUrl: text("avatar_url"),
