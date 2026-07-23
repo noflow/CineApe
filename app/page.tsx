@@ -16,7 +16,7 @@ const recs = [
   ["The Holdovers", "Sarah Kim", "This is the cozy, sharp little movie you need for a rainy night.", "red", ""],
 ];
 
-function Avatar({ children, tone = "" }: { children: React.ReactNode; tone?: string }) { return <span className={`avatar ${tone}`}>{children}</span>; }
+function Avatar({ children, tone = "", imageUrl }: { children: React.ReactNode; tone?: string; imageUrl?: string | null }) { return <span className={`avatar ${tone}`}>{imageUrl ? <img src={imageUrl} alt="" /> : children}</span>; }
 function PosterImage({ title }: { title: string }) {
   const [image, setImage] = useState<string | null>(null);
   useEffect(() => {
@@ -34,7 +34,7 @@ function Cover({ title, meta, score, tone, onClick }: { title: string; meta: str
 }
 
 export default function Home() {
-  const { isLoaded, isSignedIn } = useUser();
+  const { isLoaded, isSignedIn, user } = useUser();
   const [page, setPage] = useState<Page>("Home");
   const [modal, setModal] = useState<"recommend" | "rate" | null>(null);
   const [toast, setToast] = useState("");
@@ -45,16 +45,19 @@ export default function Home() {
   const nav = ["Home", "Discover", "For You", "Friends & Groups", "My Profile"] as Page[];
   const shown = page === "Title" ? "Title" : page;
 
-  const movieCards = (limit = 4) => <div className="cards">{titles.slice(0, limit).map(([title, meta, score, tone, note]) => <div className="media-card" key={title}><Cover title={title} meta={meta} score={score} tone={tone} onClick={openTitle}/><strong>{title}</strong><span>{note}</span></div>)}</div>;
+  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || "CineApe member";
+  const firstName = user?.firstName || displayName.split(" ")[0] || "there";
+  const initials = displayName.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
+  const movieCards = (limit = 4) => <div className="cards">{titles.slice(0, limit).map(([title, meta, score, tone]) => <div className="media-card" key={title}><Cover title={title} meta={meta} score={score} tone={tone} onClick={openTitle}/><strong>{title}</strong><span>Save it to your watchlist</span></div>)}</div>;
   const recommend = () => <button className="primary" onClick={() => setModal("recommend")}>+ Recommend</button>;
 
   if (!isLoaded || !isSignedIn) return <LandingPage />;
 
   return <div className="app-shell">
-    <aside className="sidebar"><button className="brand" onClick={() => setPage("Home")}><i></i>CineApe</button><p>MENU</p><nav>{nav.map((item, index) => <button key={item} className={shown === item ? "active" : ""} onClick={() => setPage(item)}><span>{["⌂", "⌕", "✦", "♧", "◉"][index]}</span>{item}{item === "For You" && <b>3</b>}</button>)}</nav><div className="account"><Avatar>SB</Avatar><div><strong>Shawn Baker</strong><span>Free plan</span></div></div></aside>
+    <aside className="sidebar"><button className="brand" onClick={() => setPage("Home")}><i></i>CineApe</button><p>MENU</p><nav>{nav.map((item, index) => <button key={item} className={shown === item ? "active" : ""} onClick={() => setPage(item)}><span>{["⌂", "⌕", "✦", "♧", "◉"][index]}</span>{item}</button>)}</nav><div className="account"><Avatar imageUrl={user?.imageUrl}>{initials}</Avatar><div><strong>{displayName}</strong><span>Free plan</span></div></div></aside>
     <main><header><button className="mobile-brand" onClick={() => setPage("Home")}><i></i>CineApe</button><label className="search">⌕<input placeholder="Search movies, shows, people..."/></label><div><button className="bell" aria-label="Notifications">♧</button>{recommend()}</div></header>
 
-    {page === "Home" && <section className="page home"><div className="hero"><div><p className="eyebrow">YOUR CIRCLE IS WATCHING</p><h1>Good picks hit different from people who know you.</h1><p>Three friends think you’ll love something this week. Your next favorite is waiting.</p><button className="light-button" onClick={() => setPage("For You")}>See your recommendations →</button></div><div className="poster-stack"><span className="poster poster-1">THE<br/>FALL</span><span className="poster poster-2">LAST<br/>SUMMER</span><span className="poster poster-3">HOLLOW</span></div></div><div className="dashboard"><div><div className="section-title"><h2>Trending in your circle <span>· this week</span></h2><button onClick={() => setPage("Discover")}>Explore all</button></div>{movieCards()}<div className="section-title lower"><h2>Because you loved <em>Severance</em></h2><button onClick={() => setPage("Discover")}>See matches</button></div>{movieCards()}</div><aside className="panel for-you"><div className="section-title"><h2>For you</h2><button onClick={() => setPage("For You")}>View all</button></div><MiniRec title="Last Summer" person="Maya" tone="lila" label="New"/><MiniRec title="Slow Horses" person="John" tone="ghost" label="Watching"/><MiniRec title="The Holdovers" person="Sarah" tone="garden" label="New"/><div className="stats"><div><b>14</b><span>On your list</span></div><div><b>86%</b><span>Circle match</span></div></div><div className="trust"><p>YOUR TASTE STATUS</p><h3>Excellent listener ✨</h3><span>Your friends’ picks match your ratings 87% of the time.</span><i></i></div></aside></div></section>}
+    {page === "Home" && <section className="page home onboarding-home"><div className="hero onboarding-hero"><div><p className="eyebrow">WELCOME TO CINEAPE, {firstName.toUpperCase()}</p><h1>Your circle starts with one great pick.</h1><p>Discover something worth watching, then invite the people whose recommendations you trust most.</p><button className="light-button" onClick={() => setPage("Discover")}>Discover movies and shows →</button></div><div className="poster-stack"><span className="poster poster-1">YOUR<br/>NEXT</span><span className="poster poster-2">GREAT<br/>PICK</span><span className="poster poster-3">START<br/>HERE</span></div></div><div className="onboarding-steps"><article className="panel"><b>01</b><h2>Find something you’ll love</h2><p>Browse movies and shows, then save the ones that look promising.</p><button onClick={() => setPage("Discover")}>Explore titles →</button></article><article className="panel"><b>02</b><h2>Invite your people</h2><p>Build a private circle for family, friends, or your movie-night group.</p><button onClick={() => setPage("Friends & Groups")}>Start your circle →</button></article><article className="panel"><b>03</b><h2>Make recommendations personal</h2><p>Send a pick with a note when you know someone will love it.</p><button onClick={() => flash("Choose a title to send your first recommendation.")}>How it works →</button></article></div><div className="section-title lower"><h2>Start with something good</h2><button onClick={() => setPage("Discover")}>Explore all</button></div>{movieCards()}</section>}
 
     {page === "Discover" && <section className="page"><Intro label="CURATED FOR YOU" title="Find your next obsession." text="Browse the titles your circle is talking about and make every watch count." action={recommend()}/><Tabs labels={["All", "Movies", "TV Shows", "From friends", "Hidden gems"]}/><div className="discover-grid">{[...titles, ["Dark Matter", "Series · Mind-bender", "8.5", "e", "91% taste match"]].map(([title, meta, score, tone, note]) => <div className="media-card" key={title}><Cover title={title} meta={meta} score={score} tone={tone} onClick={openTitle}/><strong>{title}</strong><span>{note}</span></div>)}</div></section>}
 
