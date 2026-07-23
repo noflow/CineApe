@@ -9,9 +9,9 @@ export async function POST() {
 
   const clerkUser = await currentUser();
   const email = clerkUser?.primaryEmailAddress?.emailAddress;
-  if (!clerkUser || !email) return Response.json({ error: "An email address is required to create a Quecircle profile." }, { status: 400 });
+  if (!clerkUser || !email) return Response.json({ error: "An email address is required to create a CineApe profile." }, { status: 400 });
 
-  const displayName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || clerkUser.username || "Quecircle member";
+  const displayName = [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" ") || clerkUser.username || "CineApe member";
   await db.insert(users).values({ clerkUserId: userId, email, displayName, avatarUrl: clerkUser.imageUrl }).onConflictDoUpdate({
     target: users.clerkUserId,
     set: { email, displayName, avatarUrl: clerkUser.imageUrl, updatedAt: new Date() },
