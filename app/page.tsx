@@ -36,19 +36,20 @@ function Cover({ title, meta, score, tone, onClick }: { title: string; meta: str
 export default function Home() {
   const { isLoaded, isSignedIn, user } = useUser();
   const [page, setPage] = useState<Page>("Home");
+  const [selectedTitle, setSelectedTitle] = useState({ title: "Mickey 17", meta: "2025 · Science fiction", score: "8.2" });
   const [modal, setModal] = useState<"recommend" | "rate" | null>(null);
   const [toast, setToast] = useState("");
   const [watching, setWatching] = useState<string[]>(["Slow Horses"]);
   const [recipient, setRecipient] = useState("Maya");
   const flash = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2800); };
-  const openTitle = () => setPage("Title");
+  const openTitle = (title = "Mickey 17", meta = "2025 · Science fiction", score = "8.2") => { setSelectedTitle({ title, meta, score }); setPage("Title"); };
   const nav = ["Home", "Discover", "For You", "Friends & Groups", "My Profile"] as Page[];
   const shown = page === "Title" ? "Title" : page;
 
   const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || "CineApe member";
   const firstName = user?.firstName || displayName.split(" ")[0] || "there";
   const initials = displayName.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
-  const movieCards = (limit = 4) => <div className="cards">{titles.slice(0, limit).map(([title, meta, score, tone]) => <div className="media-card" key={title}><Cover title={title} meta={meta} score={score} tone={tone} onClick={openTitle}/><strong>{title}</strong><span>Save it to your watchlist</span></div>)}</div>;
+  const movieCards = (limit = 4) => <div className="cards">{titles.slice(0, limit).map(([title, meta, score, tone]) => <div className="media-card" key={title}><Cover title={title} meta={meta} score={score} tone={tone} onClick={() => openTitle(title, meta, score)}/><strong>{title}</strong><span>Save it to your watchlist</span></div>)}</div>;
   const recommend = () => <button className="primary" onClick={() => setModal("recommend")}>+ Recommend</button>;
 
   if (!isLoaded || !isSignedIn) return <LandingPage />;
@@ -61,7 +62,7 @@ export default function Home() {
 
     {page === "Discover" && <section className="page"><Intro label="CURATED FOR YOU" title="Find your next obsession." text="Browse the titles your circle is talking about and make every watch count." action={recommend()}/><Tabs labels={["All", "Movies", "TV Shows", "From friends", "Hidden gems"]}/><div className="discover-grid">{[...titles, ["Dark Matter", "Series · Mind-bender", "8.5", "e", "91% taste match"]].map(([title, meta, score, tone, note]) => <div className="media-card" key={title}><Cover title={title} meta={meta} score={score} tone={tone} onClick={openTitle}/><strong>{title}</strong><span>{note}</span></div>)}</div></section>}
 
-    {page === "Title" && <section className="page detail"><div><div className="detail-cover"><span><small>2025 · SCIENCE FICTION</small>MICKEY<br/>17</span></div><button className="primary wide" onClick={() => setModal("recommend")}>✦ Recommend to a friend</button><button className="secondary wide" onClick={() => setModal("rate")}>☆ Rate this title</button></div><article><p className="eyebrow">A CIRCLE FAVORITE</p><h1>Mickey 17</h1><p className="muted">2025 · 2h 17m · R · Science fiction, Comedy</p><div className="score-row"><div className="score-orb">8.2</div><p><b>Circle rating</b><span>from 18 friends</span></p><hr/><p><b>92% <small>match</small></b><span>Your circle thinks you’ll like it</span></p></div><p className="synopsis">An unlikely hero is sent on a dangerous mission to colonize an ice world. When one expendable worker refuses to disappear, the system starts to unravel.</p><h2>Why it’s in your circle</h2><div className="avatars"><Avatar>JB</Avatar><Avatar tone="blue-tone">MR</Avatar><Avatar tone="rose-tone">SK</Avatar></div><p className="muted small"><b>John, Maya, and 5 others</b> rated it 8+.</p><h2>Good to know</h2><div className="tags"><span>Clever & weird</span><span>Big ideas</span><span>Dark humor</span><span>Slow burn</span></div><h2>From Maya</h2><div className="note"><b>✦ Personal recommendation</b><p>“The world-building is wild and it has that strange, tense energy you loved in Severance. Go in blind.”</p></div></article><aside className="panel detail-aside"><h3>Your take</h3><p>Not watched yet? Add it to your list.</p><button className="secondary wide" onClick={() => setModal("rate")}>☆ I watched this</button><button className="selected wide">+ Add to watchlist</button><hr/><h3>Where to watch</h3><p className="stream">● Rent or buy on Apple TV</p><p className="stream prime">a Prime Video</p></aside></section>}
+    {page === "Title" && <TitleDetails selection={selectedTitle} onBack={() => setPage("Discover")} onRecommend={() => setModal("recommend")}/>} 
 
     {page === "For You" && <section className="page"><Intro label="YOUR RECOMMENDATIONS" title="From people who get you." text="Keep track of every great pick, thoughtful note, and your own verdict." action={recommend()}/><div className="inbox-layout"><div><Tabs labels={["For you 3", "Sent", "Watching", "Completed"]}/><div className="panel inbox">{recs.map(([title, person, message, tone, label]) => <article key={title}><span className={`inbox-cover ${tone}`}></span><div><h3>{title} {label && <small>{label}</small>}</h3><p>Recommended by <b>{person}</b> · {title === "Slow Horses" ? "TV series · 4 seasons" : "Movie · 2025"}</p><em>“{message}”</em></div><div><button className="small-primary" onClick={() => { setWatching(watching.includes(title) ? watching : [...watching, title]); flash(`Added ${title} to your Watching list`); }}>{watching.includes(title) ? "Watching" : "Start watching"}</button><button className="small-ghost">Save</button></div></article>)}</div></div><aside className="panel people"><div className="section-title"><h2>People you trust</h2><button onClick={() => setPage("Friends & Groups")}>Manage</button></div><Friend name="Maya Reynolds" initials="MR" match="92%"/><Friend name="John Baker" initials="JB" match="87%" tone="blue-tone"/><Friend name="Sarah Kim" initials="SK" match="81%" tone="rose-tone"/><div className="match-card"><b>92% taste match</b><span>Maya’s recommendations almost always land for you.</span></div></aside></div></section>}
 
@@ -136,6 +137,50 @@ function LandingPage() {
   </div>;
 }
 function TmdbAttribution() { return <footer className="tmdb-attribution" aria-label="TMDB attribution"><a href="https://www.themoviedb.org" target="_blank" rel="noreferrer"><img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_short-8e7b30f73a4020692ccca9c88bafe5dcb6f8a62a4c6bc55cd9ba82bb2cd95f6c.svg" alt="TMDB" /></a><p>This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</p></footer>; }
+type LiveTitle = { id: number; type: "movie" | "tv"; title: string; overview: string; year: string | null; poster: string | null; tmdbScore: number | null; tmdbVotes: number; runtime: number | null; genres: string[]; trailer: string | null; cast: Array<{ name: string; character: string; image: string | null }> };
+type CommunityReview = { score: number; review: string | null; createdAt: string; displayName: string; avatarUrl: string | null };
+
+function TitleDetails({ selection, onBack, onRecommend }: { selection: { title: string; meta: string; score: string }; onBack: () => void; onRecommend: () => void }) {
+  const [details, setDetails] = useState<LiveTitle | null>(null);
+  const [reviews, setReviews] = useState<CommunityReview[]>([]);
+  const [community, setCommunity] = useState<{ average: number | null; count: number }>({ average: null, count: 0 });
+  const [loading, setLoading] = useState(true);
+  const [score, setScore] = useState(8);
+  const [review, setReview] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true); setDetails(null); setReviews([]); setCommunity({ average: null, count: 0 }); setReview(""); setMessage("");
+    void fetch(`/api/tmdb?query=${encodeURIComponent(selection.title)}`).then(response => response.ok ? response.json() : null)
+      .then(async (match: { id?: number; type?: "movie" | "tv" } | null) => {
+        if (!match?.id || !match.type || !active) return;
+        const response = await fetch(`/api/tmdb?id=${match.id}&type=${match.type}`);
+        const next = response.ok ? await response.json() as LiveTitle : null;
+        if (!active || !next) return;
+        setDetails(next); setLoading(false);
+        const reviewResponse = await fetch(`/api/reviews?tmdbId=${next.id}&type=${next.type}`);
+        if (!reviewResponse.ok || !active) return;
+        const communityData = await reviewResponse.json() as { reviews: CommunityReview[]; average: number | null; count: number };
+        if (active) { setReviews(communityData.reviews); setCommunity({ average: communityData.average, count: communityData.count }); }
+      }).catch(() => undefined).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [selection.title]);
+
+  const saveReview = async () => {
+    if (!details) return;
+    setSaving(true); setMessage("");
+    const response = await fetch("/api/reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tmdbId: details.id, type: details.type, name: details.title, year: details.year ? Number(details.year) : null, score, review }) });
+    if (!response.ok) { const data = await response.json().catch(() => null) as { error?: string } | null; setMessage(data?.error ?? "Your review could not be saved."); setSaving(false); return; }
+    setMessage("Your CineApe review is live."); setSaving(false);
+    const refresh = await fetch(`/api/reviews?tmdbId=${details.id}&type=${details.type}`);
+    if (refresh.ok) { const data = await refresh.json() as { reviews: CommunityReview[]; average: number | null; count: number }; setReviews(data.reviews); setCommunity({ average: data.average, count: data.count }); }
+  };
+
+  const shownTitle = details?.title ?? selection.title;
+  return <section className="page live-title-page"><button className="back-link" onClick={onBack}>← Back to discover</button>{loading && <div className="panel title-loading">Loading live title details…</div>}{!loading && details && <><div className="live-title-head"><div className="live-poster">{details.poster ? <img src={details.poster} alt={`${shownTitle} poster`} /> : <span>{shownTitle}</span>}</div><div className="live-title-copy"><p className="eyebrow">{details.type === "tv" ? "TV SERIES" : "MOVIE"} · {details.year ?? "—"}</p><h1>{shownTitle}</h1><p className="muted">{details.runtime ? `${details.runtime} min · ` : ""}{details.genres.join(" · ")}</p><div className="score-cards"><div><b>{community.average ?? "—"}</b><span>CineApe Rating<br/>{community.count ? `${community.count} public review${community.count === 1 ? "" : "s"}` : "No reviews yet"}</span></div><div><b>—</b><span>Circle Rating<br/>Invite people to unlock</span></div><a href="https://www.themoviedb.org" target="_blank" rel="noreferrer"><b>{details.tmdbScore ?? "—"}</b><span>TMDB score<br/>{details.tmdbVotes.toLocaleString()} votes</span></a></div><p className="live-overview">{details.overview || "A synopsis is not available for this title yet."}</p><div className="live-title-actions"><button className="primary" onClick={onRecommend}>✦ Recommend to someone</button><button className="secondary" onClick={() => document.getElementById("write-review")?.scrollIntoView({ behavior: "smooth" })}>☆ Write a review</button></div></div></div>{details.trailer && <section className="trailer-section"><div className="section-title"><h2>Official trailer</h2><span>From TMDB</span></div><div className="trailer-frame"><iframe src={details.trailer} title={`${shownTitle} official trailer`} allowFullScreen /></div></section>}<section className="cast-section"><div className="section-title"><h2>Cast</h2><span>{details.cast.length ? "From TMDB" : "Cast information unavailable"}</span></div><div className="cast-grid">{details.cast.map(person => <article key={`${person.name}-${person.character}`}><div>{person.image ? <img src={person.image} alt="" /> : <span>{person.name.slice(0, 1)}</span>}</div><b>{person.name}</b><small>{person.character || "Cast"}</small></article>)}</div></section><section className="community-section"><div className="section-title"><div><p className="eyebrow">PUBLIC ON CINEAPE</p><h2>Community reviews</h2></div><span>Everyone can read these</span></div><div className="review-layout"><form className="write-review panel" id="write-review" onSubmit={event => { event.preventDefault(); void saveReview(); }}><h3>Rate {shownTitle}</h3><p>Your review will be visible to all CineApe members.</p><div className="rating-buttons">{[1,2,3,4,5,6,7,8,9,10].map(value => <button type="button" className={score === value ? "chosen" : ""} key={value} onClick={() => setScore(value)}>{value}</button>)}</div><textarea value={review} onChange={event => setReview(event.target.value)} placeholder="What did you think? Keep it helpful and spoiler-aware." maxLength={2000}/><button className="primary wide" disabled={saving}>{saving ? "Publishing…" : "Publish my review"}</button>{message && <small className="review-message">{message}</small>}</form><div className="public-reviews">{reviews.length ? reviews.map(item => <article className="panel" key={`${item.displayName}-${item.createdAt}`}><div className="review-author">{item.avatarUrl ? <img src={item.avatarUrl} alt="" /> : <span>{item.displayName.slice(0, 1)}</span>}<div><b>{item.displayName}</b><small>Public CineApe review</small></div><strong>{item.score}/10</strong></div>{item.review ? <p>{item.review}</p> : <p className="muted">Rated this title without a written review.</p>}</article>) : <div className="empty-reviews panel"><b>Be the first to review it.</b><p>Your score will begin the CineApe community rating for this title.</p></div>}</div></div></section></>}</section>;
+}
 function Intro({label,title,text,action}:{label:string,title:string,text:string,action:React.ReactNode}) { return <div className="intro"><div><p className="eyebrow">{label}</p><h1>{title}</h1><p>{text}</p></div>{action}</div>; }
 function Tabs({labels}:{labels:string[]}) { const [chosen,setChosen]=useState(0); return <div className="tabs">{labels.map((x,i)=><button onClick={()=>setChosen(i)} className={chosen===i?"chosen":""} key={x}>{x}</button>)}</div>; }
 function MiniRec({title,person,tone,label}:{title:string,person:string,tone:string,label:string}) { return <div className="mini-rec"><span className={`mini-cover ${tone}`}></span><p><b>{title}</b><span><strong>{person}</strong> thinks you’ll love it</span></p><small>{label}</small></div>; }
