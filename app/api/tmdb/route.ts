@@ -24,6 +24,9 @@ export async function GET(request: Request) {
   const mode = params.get("mode");
   const id = Number(params.get("id"));
   const type = params.get("type") === "tv" ? "tv" : "movie";
+  const edgeCountry = request.headers.get("cf-ipcountry") ?? request.headers.get("x-vercel-ip-country");
+  const requestedCountry = params.get("country")?.toUpperCase();
+  const country = edgeCountry === "CA" || edgeCountry === "US" ? edgeCountry : requestedCountry === "CA" ? "CA" : "US";
   if (!token) return Response.json({ configured: false, image: null });
 
   try {
@@ -73,10 +76,14 @@ export async function GET(request: Request) {
       };
       const trailer = data.videos?.results?.find(video => video.site === "YouTube" && video.type === "Trailer" && video.official)
         ?? data.videos?.results?.find(video => video.site === "YouTube" && video.type === "Trailer");
-      const providers = data["watch/providers"]?.results?.US ?? data["watch/providers"]?.results?.CA ?? data["watch/providers"]?.results?.GB;
+      const providers = data["watch/providers"]?.results?.[country];
+      const priority = ["Netflix", "Amazon Prime Video", "Disney Plus", "Apple TV", "Paramount Plus", "Paramount+", "Crave", "Hulu", "Max", "Max Amazon Channel", "Peacock Premium"];
       const streaming = providers?.flatrate ?? [];
-      const paidOptions = [...(providers?.rent ?? []), ...(providers?.buy ?? [])];
-      const uniqueProviders = [...streaming, ...paidOptions].filter((provider, index, list) => list.findIndex(item => item.provider_name === provider.provider_name) === index).slice(0, 5);
+      const primaryProvider = [...streaming].sort((a, b) => {
+        const aIndex = priority.findIndex(name => a.provider_name === name);
+        const bIndex = priority.findIndex(name => b.provider_name === name);
+        return (aIndex === -1 ? priority.length : aIndex) - (bIndex === -1 ? priority.length : bIndex);
+      })[0] ?? null;
       return Response.json({
         id, type, configured: true, title: data.title ?? data.name ?? "Untitled", overview: data.overview ?? "",
         year: data.release_date?.slice(0, 4) ?? data.first_air_date?.slice(0, 4) ?? null,
@@ -85,7 +92,7 @@ export async function GET(request: Request) {
         runtime: data.runtime ?? data.episode_run_time?.[0] ?? null, genres: data.genres?.map(genre => genre.name) ?? [],
         trailer: trailer ? `https://www.youtube.com/embed/${trailer.key}` : null,
         cast: data.credits?.cast?.slice(0, 10).map(person => ({ name: person.name, character: person.character ?? "", image: poster(person.profile_path, "w185") })) ?? [],
-        providers: uniqueProviders.map(provider => ({ name: provider.provider_name, image: poster(provider.logo_path, "w92") })), providerLink: providers?.link ?? null,
+        country, providers: primaryProvider ? [{ name: primaryProvider.provider_name, image: poster(primaryProvider.logo_path, "w92") }] : [],
       }, { headers: { "Cache-Control": "public, max-age=3600, s-maxage=43200" } });
     }
 

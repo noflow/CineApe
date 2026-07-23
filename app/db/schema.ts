@@ -8,6 +8,7 @@ const timestamps = {
 export const titleType = pgEnum("title_type", ["movie", "tv"]);
 export const recommendationStatus = pgEnum("recommendation_status", ["pending", "watching", "watched", "not_interested"]);
 export const libraryStatus = pgEnum("library_status", ["watchlist", "watching", "completed"]);
+export const notificationKind = pgEnum("notification_kind", ["recommendation", "group_join", "streaming"]);
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -65,6 +66,14 @@ export const groupMembers = pgTable("group_members", {
   joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [primaryKey({ columns: [table.groupId, table.userId] })]);
 
+export const groupTitlePicks = pgTable("group_title_picks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  titleId: uuid("title_id").notNull().references(() => titles.id, { onDelete: "cascade" }),
+  addedBy: uuid("added_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  ...timestamps,
+}, (table) => [uniqueIndex("group_title_picks_group_title_unique").on(table.groupId, table.titleId)]);
+
 export const recommendations = pgTable("recommendations", {
   id: uuid("id").defaultRandom().primaryKey(),
   titleId: uuid("title_id").notNull().references(() => titles.id, { onDelete: "cascade" }),
@@ -88,5 +97,15 @@ export const recommendationRatings = pgTable("recommendation_ratings", {
   id: uuid("id").defaultRandom().primaryKey(),
   recommendationId: uuid("recommendation_id").notNull().references(() => recommendations.id, { onDelete: "cascade" }).unique(),
   score: integer("score").notNull(),
+  ...timestamps,
+});
+
+export const notifications = pgTable("notifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: notificationKind("kind").notNull(),
+  message: text("message").notNull(),
+  link: text("link"),
+  readAt: timestamp("read_at", { withTimezone: true }),
   ...timestamps,
 });
