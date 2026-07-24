@@ -298,7 +298,7 @@ function AccountControls() {
 function LandingPage() {
   return <div className="landing">
     <header className="landing-nav">
-      <a className="landing-brand" href="#top"><i></i>CineApe</a>
+      <a className="landing-brand landing-brand-logo" href="#top" aria-label="CineApe home"><img src="/cineape-logo-dark.png" alt="CineApe"/></a>
       <nav aria-label="Landing page"><a href="#how-it-works">How it works</a><a href="#why-cineape">Why CineApe</a><a href="/must-watch">Must watch</a></nav>
       <div className="landing-actions"><SignInButton><button className="landing-sign-in">Sign in</button></SignInButton><SignUpButton><button className="landing-join">Join free</button></SignUpButton></div>
     </header>

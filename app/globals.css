@@ -22,6 +22,12 @@
 /* TMDb artwork fades into the existing cinematic palette when configured. */
 .cover img{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover;animation:posterIn .35s ease both}.cover-title{text-shadow:0 2px 7px #000a}@keyframes posterIn{from{opacity:0;transform:scale(1.03)}to{opacity:1;transform:scale(1)}}
 
+/* Compact friend chips and a reliable mobile brand mark. */
+.compact-friends{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:8px}.compact-friends .friend-profile-link{width:auto;flex:none;padding:6px 8px}.compact-friends .friend-profile-link b{max-width:118px}@media(max-width:760px){.compact-friends{gap:4px;padding:7px}.compact-friends .friend-profile-link{padding:6px}.compact-friends .friend-profile-link b{max-width:88px}.mobile-brand i{width:29px!important;height:29px!important;border-radius:0!important;background-color:transparent!important;background-image:url("/cineape-mark.png")!important;background-position:center!important;background-size:contain!important;background-repeat:no-repeat!important;box-shadow:none!important}}
+
+/* Full CineApe logo on the sign-up landing page. */
+.landing-brand-logo{width:196px;height:54px}.landing-brand-logo img{display:block;width:100%;height:100%;object-fit:contain;object-position:left center}@media(max-width:800px){.landing-brand-logo{width:142px;height:42px}}
+
 /* Compact brand mark for the mobile header. */
 @media(max-width:760px){.mobile-brand i{width:29px;height:29px;border-radius:0;background:transparent url("/cineape-mark.png") center/contain no-repeat;box-shadow:none}}
 
