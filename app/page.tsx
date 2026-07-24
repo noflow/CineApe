@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Show, SignInButton, SignUpButton, UserButton, useUser } from "@clerk/nextjs";
 
 type Page = "Home" | "Discover" | "For You" | "Friends & Groups" | "My Profile" | "Studio" | "Title";
@@ -39,6 +39,7 @@ function Cover({ title, meta, score, tone, onClick }: { title: string; meta: str
 export default function Home() {
   const { isLoaded, isSignedIn, user } = useUser();
   const [page, setPage] = useState<Page>("Home");
+  const [navigationReady, setNavigationReady] = useState(false);
   const [selectedTitle, setSelectedTitle] = useState({ title: "Mickey 17", meta: "2025 · Science fiction", score: "8.2" });
   const [modal, setModal] = useState<"recommend" | "groupPick" | "quickRecommend" | null>(null);
   const [toast, setToast] = useState("");
@@ -50,10 +51,29 @@ export default function Home() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [accountDisplayName, setAccountDisplayName] = useState<string | null>(null);
+  const [needsDisplayName, setNeedsDisplayName] = useState(false);
   const flash = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2800); };
   const openTitle = (title = "Mickey 17", meta = "2025 · Science fiction", score = "8.2") => { setSelectedTitle({ title, meta, score }); setPage("Title"); };
   const nav = ["Home", "Discover", "For You", "Friends & Groups", "My Profile", ...(isAdmin ? ["Studio" as Page] : [])] as Page[];
   const shown = page === "Title" ? "Title" : page;
+
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("cineape-navigation-v1");
+      if (saved) {
+        const data = JSON.parse(saved) as { page?: Page; selectedTitle?: { title?: string; meta?: string; score?: string } };
+        if (["Home", "Discover", "For You", "Friends & Groups", "My Profile", "Studio", "Title"].includes(data.page ?? "")) setPage(data.page as Page);
+        if (data.selectedTitle?.title && data.selectedTitle.meta && data.selectedTitle.score) setSelectedTitle({ title: data.selectedTitle.title, meta: data.selectedTitle.meta, score: data.selectedTitle.score });
+      }
+    } catch { /* Ignore an invalid saved screen. */ }
+    setNavigationReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!navigationReady) return;
+    sessionStorage.setItem("cineape-navigation-v1", JSON.stringify({ page, selectedTitle }));
+  }, [navigationReady, page, selectedTitle]);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -85,7 +105,23 @@ export default function Home() {
   }, [isLoaded, isSignedIn]);
 
   useEffect(() => {
-    if (isSignedIn) void fetch("/api/account", { method: "POST" });
+    if (!isSignedIn) {
+      setAccountDisplayName(null);
+      setNeedsDisplayName(false);
+      return;
+    }
+    let active = true;
+    void (async () => {
+      await fetch("/api/account", { method: "POST" });
+      const response = await fetch("/api/account");
+      if (!response.ok || !active) return;
+      const data = await response.json() as { profile?: { displayName?: string } };
+      const name = data.profile?.displayName;
+      if (!name) return;
+      setAccountDisplayName(name);
+      setNeedsDisplayName(name === "CineApe member");
+    })().catch(() => undefined);
+    return () => { active = false; };
   }, [isSignedIn]);
 
   useEffect(() => {
@@ -95,8 +131,9 @@ export default function Home() {
   }, [isSignedIn]);
 
   const providerAccount = user?.externalAccounts.find(account => account.username || account.firstName || account.lastName);
-  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || providerAccount?.username || [providerAccount?.firstName, providerAccount?.lastName].filter(Boolean).join(" ") || "CineApe member";
-  const firstName = user?.firstName || displayName.split(" ")[0] || "there";
+  const clerkDisplayName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || providerAccount?.username || [providerAccount?.firstName, providerAccount?.lastName].filter(Boolean).join(" ") || "CineApe member";
+  const displayName = accountDisplayName || clerkDisplayName;
+  const firstName = displayName.split(" ")[0] || "there";
   const initials = displayName.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
   const movieCards = (limit = 4) => <div className="cards">{titles.slice(0, limit).map(([title, meta, score, tone]) => <div className="media-card" key={title}><Cover title={title} meta={meta} score={score} tone={tone} onClick={() => openTitle(title, meta, score)}/><strong>{title}</strong><span>Save it to your watchlist</span></div>)}</div>;
   const recommend = () => <button className="primary recommend-action" onClick={() => setModal("quickRecommend")}>+ Recommend</button>;
@@ -104,6 +141,7 @@ export default function Home() {
 
   if (!isLoaded) return <div className="session-loading" aria-label="Loading CineApe"><span></span></div>;
   if (!isSignedIn) return <LandingPage />;
+  if (!navigationReady) return <div className="session-loading" aria-label="Restoring your CineApe screen"><span></span></div>;
 
   return <div className="app-shell">
     <aside className="sidebar"><button className="brand" onClick={() => setPage("Home")}><i></i>CineApe</button><p>MENU</p><nav>{nav.map((item, index) => <button key={item} className={shown === item ? "active" : ""} onClick={() => setPage(item)}><span>{["⌂", "⌕", "✦", "♧", "◉"][index]}</span>{item}</button>)}</nav><div className="account"><Avatar imageUrl={user?.imageUrl}>{initials}</Avatar><div><strong>{displayName}</strong><span>Free plan</span></div></div></aside>
@@ -117,7 +155,7 @@ export default function Home() {
 
     {page === "For You" && <ForYouPage onInvite={() => setInviteOpen(true)} onOpen={openTitle} />}
 
-    {page === "Friends & Groups" && <CirclePage onInvite={() => setInviteOpen(true)} />}
+    {page === "Friends & Groups" && <CirclePage onInvite={() => setInviteOpen(true)} onOpen={openTitle} />}
 
     {page === "My Profile" && <ProfilePage />}
     {page === "Studio" && isAdmin && <StudioPage />}
@@ -128,8 +166,31 @@ export default function Home() {
     <div className="auth-float"><AccountControls /></div>
     {modal === "quickRecommend" && <QuickRecommendModal onClose={() => setModal(null)} onSelected={(title) => { setShareTitle(title); setModal("recommend"); }}/>} {modal === "recommend" && shareTitle && <RecommendationModal title={shareTitle} onClose={() => setModal(null)} onSent={(name) => { setModal(null); flash(`Recommendation sent to ${name} ✦`); }} />}
     {modal === "groupPick" && shareTitle && <GroupPickModal title={shareTitle} onClose={() => setModal(null)} onSaved={(name) => { setModal(null); flash(`Added to ${name}'s shared picks.`); }} />}
+    {needsDisplayName && <DisplayNameModal suggestedName={user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? ""} onSaved={(name) => { setAccountDisplayName(name); setNeedsDisplayName(false); flash(`Welcome to CineApe, ${name}.`); }} />}
     {toast && <div className="toast">{toast}</div>}
   </div>;
+}
+function DisplayNameModal({ suggestedName, onSaved }: { suggestedName: string; onSaved: (name: string) => void }) {
+  const [displayName, setDisplayName] = useState(() => suggestedName.replace(/[._-]+/g, " ").trim());
+  const [message, setMessage] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const value = displayName.trim();
+    if (value.length < 2) { setMessage("Choose a name with at least two characters."); return; }
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/account", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName: value }) });
+      const data = await response.json() as { error?: string; profile?: { displayName?: string } };
+      if (!response.ok || !data.profile?.displayName) { setMessage(data.error ?? "Your display name could not be saved."); return; }
+      onSaved(data.profile.displayName);
+    } catch { setMessage("Your display name could not be saved. Please try again."); }
+    finally { setSaving(false); }
+  };
+
+  return <div className="backdrop name-backdrop"><form className="modal name-modal" onSubmit={save}><p className="eyebrow">WELCOME TO CINEAPE</p><h2>What should your Circle call you?</h2><p>This is the name your friends and family will see on recommendations, groups, and reviews. You can change it any time in your profile.</p><label>DISPLAY NAME<input value={displayName} onChange={event => setDisplayName(event.target.value)} placeholder="Your name" autoFocus maxLength={50} /></label><button className="primary wide" disabled={saving}>{saving ? "Saving…" : "Save and continue"}</button>{message && <small className="modal-message">{message}</small>}</form></div>;
 }
 function InviteModal({ onClose }: { onClose: () => void }) {
   const [link, setLink] = useState("");
@@ -160,13 +221,13 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   return <div className="backdrop" onClick={onClose}><div className="modal invite-modal" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button><p className="eyebrow">YOUR PRIVATE CIRCLE</p><h2>Invite your people</h2><p>Share one private link with family or friends. New people can create a CineApe account; members who already have one simply sign in and are connected right away.</p><div className="invite-explainer"><b>Already on CineApe?</b><span>Open this link, sign in, and you’re added to the Circle—no second account or separate request needed.</span></div><div className="invite-link">{link || "Preparing your link…"}</div><div className="invite-actions"><button className="messenger-share" disabled={!link} onClick={shareInMessenger}>Send in Messenger</button><button className="secondary" disabled={!link} onClick={() => void copyLink()}>Copy link</button></div><small>{message}</small></div></div>;
 }
 
-type AppNotification = { id: string; kind: "recommendation" | "group_join" | "streaming"; message: string; createdAt: string; readAt: string | null };
+type AppNotification = { id: string; kind: "recommendation" | "group_join" | "streaming" | "chat"; message: string; createdAt: string; readAt: string | null };
 
 function NotificationPanel({ onClose }: { onClose: () => void }) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => { let active = true; const country = navigator.language.split("-")[1]?.toUpperCase() === "CA" ? "CA" : "US"; void fetch(`/api/notifications?country=${country}`).then(response => response.ok ? response.json() as Promise<{ notifications?: AppNotification[] }> : null).then(data => { if (active) setItems(data?.notifications ?? []); }).catch(() => { if (active) setItems([]); }).finally(() => { if (active) setLoading(false); }); void fetch("/api/notifications", { method: "PATCH" }); return () => { active = false; }; }, []);
-  const icon = (kind: AppNotification["kind"]) => kind === "recommendation" ? "✦" : kind === "group_join" ? "♧" : "▶";
+  const icon = (kind: AppNotification["kind"]) => kind === "recommendation" ? "✦" : kind === "group_join" ? "♧" : kind === "chat" ? "✉" : "▶";
   return <div className="backdrop" onClick={onClose}><div className="modal notifications-modal" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button><p className="eyebrow">YOUR UPDATES</p><h2>Notifications</h2>{loading ? <p className="share-empty">Loading updates…</p> : items.length ? <div className="notification-list">{items.map(item => <article key={item.id}><i className={item.kind}>{icon(item.kind)}</i><div><b>{item.message}</b><small>{new Date(item.createdAt).toLocaleDateString()}</small></div></article>)}</div> : <p className="share-empty">You’re all caught up. New recommendations, group invites, and streaming alerts will appear here.</p>}</div></div>;
 }
 
@@ -362,7 +423,7 @@ function ProfilePage() {
 
 type DiscoverTitle = { id: number; type: "movie" | "tv"; title: string; year: string | null; image: string | null; score: string };
 
-function DiscoverPage({ onOpen }: { onOpen: (title?: string, meta?: string, score?: string) => void }) {
+function DiscoverPageLegacy({ onOpen }: { onOpen: (title?: string, meta?: string, score?: string) => void }) {
   const [filter, setFilter] = useState<"all" | "movie" | "tv">("all");
   const [category, setCategory] = useState("all");
   const [titles, setTitles] = useState<DiscoverTitle[]>([]);
@@ -384,6 +445,19 @@ function DiscoverPage({ onOpen }: { onOpen: (title?: string, meta?: string, scor
     : [{ key: "all", label: "All shows" }, { key: "new", label: "New releases" }, { key: "drama", label: "Drama" }, { key: "thriller", label: "Mystery & thriller" }, { key: "comedy", label: "Comedy" }, { key: "animation", label: "Animation" }, { key: "horror", label: "Horror & fantasy" }, { key: "crime", label: "Crime" }, { key: "reality", label: "Reality" }];
   const subtitle = filter === "all" ? "Popular English-language movies and shows for your region." : filter === "movie" ? "Popular English-language movies to save for your next night in." : "Popular English-language series ready for your next binge.";
   return <section className="page live-discover"><Intro label="DISCOVER" title="Find your next obsession." text={subtitle} action={null}/><div className="tabs discover-tabs">{filters.map(item => <button key={item.key} className={filter === item.key ? "chosen" : ""} onClick={() => { setFilter(item.key); setCategory("all"); }}>{item.label}</button>)}</div>{filter !== "all" && <div className="genre-chips" aria-label={`${filter === "movie" ? "Movie" : "TV show"} categories`}>{categories.map(item => <button key={item.key} className={category === item.key ? "chosen" : ""} onClick={() => setCategory(item.key)}>{item.label}</button>)}</div>}{loading ? <div className="panel discover-loading">Finding great titles…</div> : titles.length ? <div className="discover-grid live-discover-grid">{titles.map((title, index) => <article className="media-card" key={`${title.type}-${title.id}`}><button className={`cover ${["a", "b", "c", "d", "e"][index % 5]}`} onClick={() => onOpen(title.title, `${title.year ?? "—"} · ${title.type === "tv" ? "TV series" : "Movie"}`, title.score)}>{title.image && <img src={title.image} alt={`${title.title} poster`} />}<span className="cover-type">{title.type === "tv" ? "TV" : "Movie"}</span><span className="cover-score">★ {title.score}</span><span className="cover-title"><small>{title.year ?? "New release"}</small>{title.title}</span></button><strong>{title.title}</strong><span>{title.type === "tv" ? "TV series" : "Movie"} · TMDB {title.score}</span></article>)}</div> : <div className="panel discover-empty"><b>Live titles are not available just now.</b><p>Try using the search at the top to find a movie, show, actor, or actress.</p></div>}</section>;
+}
+
+function DiscoverPage({ onOpen }: { onOpen: (title?: string, meta?: string, score?: string) => void }) {
+  const [filter, setFilter] = useState<"all" | "movie" | "tv">("all"); const [category, setCategory] = useState("all"); const [titles, setTitles] = useState<DiscoverTitle[]>([]); const [loading, setLoading] = useState(true); const [loadingMore, setLoadingMore] = useState(false); const [hasMore, setHasMore] = useState(true); const [nextPage, setNextPage] = useState(2); const sentinel = useRef<HTMLDivElement | null>(null);
+  const country = () => navigator.language.split("-")[1]?.toUpperCase() === "CA" ? "CA" : "US";
+  const fetchTitles = async (page: number) => { const response = await fetch(`/api/tmdb?mode=discover&type=${filter}&category=${category}&country=${country()}&page=${page}`); return response.ok ? await response.json() as { titles?: DiscoverTitle[]; hasMore?: boolean } : { titles: [], hasMore: false }; };
+  useEffect(() => { let active = true; setLoading(true); setTitles([]); setHasMore(true); setNextPage(2); void fetchTitles(1).then(data => { if (!active) return; setTitles(data.titles ?? []); setHasMore(Boolean(data.hasMore)); }).catch(() => { if (active) { setTitles([]); setHasMore(false); } }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [filter, category]);
+  const loadMore = async () => { if (loading || loadingMore || !hasMore) return; setLoadingMore(true); try { const data = await fetchTitles(nextPage); const more = data.titles ?? []; setTitles(current => { const existing = new Set(current.map(title => `${title.type}-${title.id}`)); return [...current, ...more.filter(title => !existing.has(`${title.type}-${title.id}`))]; }); setHasMore(Boolean(data.hasMore) && more.length > 0); setNextPage(current => current + 1); } catch { setHasMore(false); } finally { setLoadingMore(false); } };
+  useEffect(() => { const node = sentinel.current; if (!node || !hasMore || loading) return; const observer = new IntersectionObserver(entries => { if (entries[0]?.isIntersecting) void loadMore(); }, { rootMargin: "420px" }); observer.observe(node); return () => observer.disconnect(); }, [hasMore, loading, loadingMore, nextPage, titles.length]);
+  const filters = [{ key: "all", label: "Popular now" }, { key: "movie", label: "Movies" }, { key: "tv", label: "TV shows" }] as const;
+  const categories = filter === "movie" ? [{ key: "all", label: "All movies" }, { key: "new", label: "New releases" }, { key: "drama", label: "Drama" }, { key: "thriller", label: "Thriller" }, { key: "comedy", label: "Comedy" }, { key: "animation", label: "Animation" }, { key: "horror", label: "Horror" }, { key: "scifi", label: "Sci-fi" }, { key: "family", label: "Family" }] : [{ key: "all", label: "All shows" }, { key: "new", label: "New releases" }, { key: "drama", label: "Drama" }, { key: "thriller", label: "Mystery & thriller" }, { key: "comedy", label: "Comedy" }, { key: "animation", label: "Animation" }, { key: "horror", label: "Horror & fantasy" }, { key: "crime", label: "Crime" }, { key: "reality", label: "Reality" }];
+  const subtitle = filter === "all" ? "Popular English-language movies and shows for your region." : filter === "movie" ? "Popular English-language movies to save for your next night in." : "Popular English-language series ready for your next binge.";
+  return <section className="page live-discover"><Intro label="DISCOVER" title="Find your next obsession." text={subtitle} action={null}/><div className="tabs discover-tabs">{filters.map(item => <button key={item.key} className={filter === item.key ? "chosen" : ""} onClick={() => { setFilter(item.key); setCategory("all"); }}>{item.label}</button>)}</div>{filter !== "all" && <div className="genre-chips" aria-label={`${filter === "movie" ? "Movie" : "TV show"} categories`}>{categories.map(item => <button key={item.key} className={category === item.key ? "chosen" : ""} onClick={() => setCategory(item.key)}>{item.label}</button>)}</div>}{loading ? <div className="panel discover-loading">Finding great titles…</div> : titles.length ? <><div className="discover-grid live-discover-grid">{titles.map((title, index) => <article className="media-card" key={`${title.type}-${title.id}`}><button className={`cover ${["a", "b", "c", "d", "e"][index % 5]}`} onClick={() => onOpen(title.title, `${title.year ?? "—"} · ${title.type === "tv" ? "TV series" : "Movie"}`, title.score)}>{title.image && <img src={title.image} alt={`${title.title} poster`} />}<span className="cover-type">{title.type === "tv" ? "TV" : "Movie"}</span><span className="cover-score">★ {title.score}</span><span className="cover-title"><small>{title.year ?? "New release"}</small>{title.title}</span></button><strong>{title.title}</strong><span>{title.type === "tv" ? "TV series" : "Movie"} · TMDB {title.score}</span></article>)}</div><div className="discover-more" ref={sentinel}>{loadingMore ? "Loading more great picks…" : hasMore ? "Keep scrolling for more" : "You’ve reached the end for now."}</div>{hasMore && !loadingMore && <button className="secondary discover-more-button" onClick={() => void loadMore()}>Load more</button>}</> : <div className="panel discover-empty"><b>Live titles are not available just now.</b><p>Try using the search at the top to find a movie, show, actor, or actress.</p></div>}</section>;
 }
 
 type CircleFriend = { id: string; displayName: string; avatarUrl: string | null; bio: string | null };
@@ -426,7 +500,7 @@ type FriendProfileData = {
   completed: Array<{ title: string; type: "movie" | "tv"; year: number | null; posterPath: string | null }>;
 };
 
-function CirclePage({ onInvite }: { onInvite: () => void }) {
+function CirclePageBase({ onInvite }: { onInvite: () => void }) {
   const [friends, setFriends] = useState<CircleFriend[]>([]);
   const [groups, setGroups] = useState<CircleGroup[]>([]);
   const [loading, setLoading] = useState(true);
@@ -440,6 +514,37 @@ function CirclePage({ onInvite }: { onInvite: () => void }) {
   const createGroup = async (event: React.FormEvent) => { event.preventDefault(); if (!groupName.trim()) return; setGroupMessage("Creating your group…"); const response = await fetch("/api/circle", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: groupName }) }); const data = await response.json() as { group?: CircleGroup; error?: string }; if (!response.ok || !data.group) { setGroupMessage(data.error ?? "Your group could not be created."); return; } setGroups(current => [data.group!, ...current]); setGroupName(""); setCreating(false); setGroupMessage(""); };
   const initials = (name: string) => name.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
   return <section className="page circle-page"><Intro label="YOUR PEOPLE" title="Better together." text="Share the good stuff with the people you actually watch with." action={<button className="primary" onClick={() => { setCreating(true); setGroupMessage(""); }}>+ Create a group</button>}/>{creating && <form className="panel group-creator" onSubmit={createGroup}><label>GROUP NAME<input value={groupName} onChange={event => setGroupName(event.target.value)} placeholder="Movie night crew" maxLength={60} autoFocus/></label><div><button type="button" className="secondary" onClick={() => setCreating(false)}>Cancel</button><button className="primary" type="submit">Create group</button></div>{groupMessage && <small>{groupMessage}</small>}</form>}<section className="circle-section"><div className="section-title"><div><h2>Your friends <span>{friends.length ? `· ${friends.length}` : ""}</span></h2><p>People in your private CineApe circle.</p></div><button onClick={onInvite}>Invite people</button></div>{loading ? <div className="panel circle-loading">Loading your circle…</div> : friends.length ? <div className="panel circle-friends">{friends.map(friend => <button className="friend-profile-link" key={friend.id} onClick={() => setProfileFriend(friend)}><Avatar imageUrl={friend.avatarUrl}>{initials(friend.displayName)}</Avatar><div><b>{friend.displayName}</b><small>{friend.bio || "In your CineApe circle"}</small></div><span>View profile →</span></button>)}</div> : <div className="panel circle-empty"><div><b>Your circle starts with your people.</b><p>Invite family and friends to swap recommendations, compare reviews, and plan what to watch next.</p></div><button className="primary" onClick={onInvite}>Invite people</button></div>}</section><section className="circle-section"><div className="section-title"><div><h2>Your groups <span>{groups.length ? `· ${groups.length}` : ""}</span></h2><p>Private spaces for movie nights, families, and favorite shows.</p></div></div>{loading ? <div className="panel circle-loading">Loading your groups…</div> : groups.length ? <div className="group-grid live-group-grid">{groups.map((group, index) => <article className={`panel group live-group tone-${index % 3}`} key={group.id}><i>{index % 3 === 0 ? "✦" : index % 3 === 1 ? "⌂" : "◉"}</i><h3>{group.name}</h3><p>{group.memberCount} {group.memberCount === 1 ? "member" : "members"} · {group.pickCount} shared {group.pickCount === 1 ? "pick" : "picks"}</p>{group.isOwner && <button onClick={() => setInvitingGroup(group)}>Invite a friend</button>}</article>)}</div> : <div className="panel circle-empty"><div><b>Create a home for your next watch.</b><p>Start a private group for your family, friend group, or recurring movie night.</p></div><button className="primary" onClick={() => setCreating(true)}>Create a group</button></div>}</section>{profileFriend && <FriendProfileModal friend={profileFriend} onClose={() => setProfileFriend(null)}/>} {invitingGroup && <GroupInviteModal group={invitingGroup} friends={friends} onClose={() => setInvitingGroup(null)} onInvited={() => { setInvitingGroup(null); load(); }} />}</section>;
+}
+
+type MovieNightChoice = { id: string; title: string; type: "movie" | "tv"; year: number | null; posterPath: string | null; votes: number; voters: Array<{ id: string; displayName: string; avatarUrl: string | null }>; selected: boolean };
+type MovieNightPoll = { id: string; question: string; status: "open" | "closed"; creator: string; totalVotes: number; options: MovieNightChoice[] };
+
+function CirclePage({ onInvite, onOpen }: { onInvite: () => void; onOpen: (title?: string, meta?: string, score?: string) => void }) { return <><CirclePageBase onInvite={onInvite}/><ChatWall onOpen={onOpen}/><MovieNightPanel/></>; }
+
+type ChatMessage = { id: string; body: string; createdAt: string; sender: { id: string; displayName: string; avatarUrl: string | null }; title: { id: string; name: string; type: "movie" | "tv"; year: number | null; posterPath: string | null } | null };
+type ChatChannel = { kind: "friend" | "group"; id: string; name: string; avatarUrl?: string | null };
+
+function ChatWall({ onOpen }: { onOpen: (title?: string, meta?: string, score?: string) => void }) {
+  const [channels, setChannels] = useState<ChatChannel[]>([]); const [selected, setSelected] = useState<ChatChannel | null>(null); const [messages, setMessages] = useState<ChatMessage[]>([]); const [viewerId, setViewerId] = useState(""); const [loading, setLoading] = useState(true); const [draft, setDraft] = useState(""); const [sending, setSending] = useState(false); const [notice, setNotice] = useState(""); const [titleSearchOpen, setTitleSearchOpen] = useState(false); const [titleQuery, setTitleQuery] = useState(""); const [titleResults, setTitleResults] = useState<SearchResult[]>([]); const [attachedTitle, setAttachedTitle] = useState<ShareTitle | null>(null);
+  useEffect(() => { let active = true; void fetch("/api/circle").then(response => response.ok ? response.json() as Promise<{ friends?: CircleFriend[]; groups?: CircleGroup[] }> : null).then(data => { if (!active) return; const next = [...(data?.friends ?? []).map(friend => ({ kind: "friend" as const, id: friend.id, name: friend.displayName, avatarUrl: friend.avatarUrl })), ...(data?.groups ?? []).map(group => ({ kind: "group" as const, id: group.id, name: group.name }))]; setChannels(next); setSelected(current => current && next.some(item => item.kind === current.kind && item.id === current.id) ? current : next[0] ?? null); }).catch(() => { if (active) setChannels([]); }); return () => { active = false; }; }, []);
+  useEffect(() => { if (!selected) { setLoading(false); setMessages([]); return; } let active = true; const load = async () => { const query = selected.kind === "friend" ? `friendId=${encodeURIComponent(selected.id)}` : `groupId=${encodeURIComponent(selected.id)}`; const response = await fetch(`/api/chat?${query}`); const data = response.ok ? await response.json() as { viewerId?: string; messages?: ChatMessage[] } : null; if (active) { setViewerId(data?.viewerId ?? ""); setMessages(data?.messages ?? []); setLoading(false); } }; setLoading(true); void load(); const interval = window.setInterval(() => void load(), 12000); return () => { active = false; window.clearInterval(interval); }; }, [selected]);
+  useEffect(() => { const query = titleQuery.trim(); if (!titleSearchOpen || query.length < 2) { setTitleResults([]); return; } const controller = new AbortController(); const timer = window.setTimeout(() => { void fetch(`/api/tmdb?mode=search&query=${encodeURIComponent(query)}`, { signal: controller.signal }).then(response => response.ok ? response.json() as Promise<{ results?: SearchResult[] }> : null).then(data => setTitleResults((data?.results ?? []).filter(result => result.type === "movie" || result.type === "tv"))).catch(() => undefined); }, 220); return () => { controller.abort(); window.clearTimeout(timer); }; }, [titleSearchOpen, titleQuery]);
+  const send = async (event: React.FormEvent) => { event.preventDefault(); if (!selected || sending || (!draft.trim() && !attachedTitle)) return; setSending(true); setNotice(""); const payload = { body: draft, title: attachedTitle, ...(selected.kind === "friend" ? { friendId: selected.id } : { groupId: selected.id }) }; const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }); const data = await response.json() as { error?: string }; if (!response.ok) { setNotice(data.error ?? "Your message could not be sent."); setSending(false); return; } setDraft(""); setAttachedTitle(null); setTitleSearchOpen(false); setTitleQuery(""); setSending(false); const query = selected.kind === "friend" ? `friendId=${encodeURIComponent(selected.id)}` : `groupId=${encodeURIComponent(selected.id)}`; const fresh = await fetch(`/api/chat?${query}`).then(result => result.ok ? result.json() as Promise<{ viewerId?: string; messages?: ChatMessage[] }> : null); setViewerId(fresh?.viewerId ?? viewerId); setMessages(fresh?.messages ?? messages); };
+  return <section className="page chat-page"><Intro label="CIRCLE CHAT" title="Talk about what to watch." text="Private chats for your friends, family, and groups. New messages refresh automatically." action={null}/>{channels.length ? <div className="chat-shell panel"><aside className="chat-channels"><p>YOUR CHATS</p>{channels.map(channel => <button key={`${channel.kind}-${channel.id}`} className={selected?.kind === channel.kind && selected.id === channel.id ? "chosen" : ""} onClick={() => { setSelected(channel); setNotice(""); }}><Avatar imageUrl={channel.avatarUrl}>{channel.kind === "group" ? "✦" : channel.name.slice(0, 2).toUpperCase()}</Avatar><span><b>{channel.name}</b><small>{channel.kind === "group" ? "Group wall" : "Direct chat"}</small></span></button>)}</aside><div className="chat-thread"><header><div><p className="eyebrow">{selected?.kind === "group" ? "GROUP WALL" : "DIRECT CHAT"}</p><h2>{selected?.name}</h2></div><span>Private to your Circle</span></header><div className="chat-messages">{loading ? <p className="chat-empty">Loading your conversation…</p> : messages.length ? messages.map(message => <article key={message.id} className={message.sender.id === viewerId ? "mine" : ""}>{message.sender.id !== viewerId && <Avatar imageUrl={message.sender.avatarUrl}>{message.sender.displayName.slice(0, 2).toUpperCase()}</Avatar>}<div><b>{message.sender.id === viewerId ? "You" : message.sender.displayName}</b>{message.body && <p>{message.body}</p>}{message.title && <button className="chat-title-card" onClick={() => onOpen(message.title!.name, `${message.title!.year ?? "—"} · ${message.title!.type === "tv" ? "TV series" : "Movie"}`, "—")}>{message.title.posterPath ? <img src={message.title.posterPath} alt=""/> : <span>★</span>}<strong>{message.title.name}<small>{message.title.type === "tv" ? "TV series" : "Movie"}{message.title.year ? ` · ${message.title.year}` : ""}</small></strong></button>}<time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time></div></article>) : <p className="chat-empty">Start the conversation. Share a thought, a plan, or a great title.</p>}</div><form className="chat-compose" onSubmit={send}>{attachedTitle && <div className="chat-attached">{attachedTitle.posterPath ? <img src={attachedTitle.posterPath} alt=""/> : <span>★</span>}<b>{attachedTitle.name}</b><button type="button" onClick={() => setAttachedTitle(null)}>×</button></div>}{titleSearchOpen && <div className="chat-title-search"><input value={titleQuery} onChange={event => setTitleQuery(event.target.value)} placeholder="Search a movie or show" autoFocus/>{titleResults.map(result => <button type="button" key={`${result.type}-${result.id}`} onClick={() => { setAttachedTitle({ tmdbId: result.id, type: result.type as "movie" | "tv", name: result.title, year: result.year ? Number(result.year) : null, posterPath: result.image }); setTitleSearchOpen(false); setTitleQuery(""); }}><b>{result.title}</b><small>{result.subtitle}</small></button>)}</div>}<div><button type="button" className="chat-attach" title="Attach a movie or TV show" onClick={() => setTitleSearchOpen(open => !open)}>＋</button><textarea value={draft} onChange={event => setDraft(event.target.value)} placeholder={`Message ${selected?.name ?? "your Circle"}`} maxLength={2000}/><button className="primary" disabled={sending || (!draft.trim() && !attachedTitle)}>{sending ? "Sending…" : "Send"}</button></div>{notice && <small className="modal-message">{notice}</small>}</form></div></div> : <div className="panel chat-start"><b>Your chats will appear here.</b><p>Invite a friend or add someone to a group to start sharing what to watch together.</p></div>}</section>;
+}
+
+function MovieNightPanel() {
+  const [groups, setGroups] = useState<CircleGroup[]>([]); const [groupId, setGroupId] = useState(""); const [poll, setPoll] = useState<MovieNightPoll | null>(null); const [loading, setLoading] = useState(true); const [creating, setCreating] = useState(false);
+  const [question, setQuestion] = useState("What should we watch?"); const [query, setQuery] = useState(""); const [matches, setMatches] = useState<EditorialTitle[]>([]); const [choices, setChoices] = useState<EditorialTitle[]>([]); const [message, setMessage] = useState(""); const [saving, setSaving] = useState(false);
+  useEffect(() => { void fetch("/api/circle").then(response => response.ok ? response.json() as Promise<{ groups?: CircleGroup[] }> : null).then(data => { const next = data?.groups ?? []; setGroups(next); setGroupId(current => current || next[0]?.id || ""); }).catch(() => setGroups([])); }, []);
+  const loadPoll = async (id = groupId) => { if (!id) { setPoll(null); setLoading(false); return; } setLoading(true); const response = await fetch(`/api/movie-nights?groupId=${encodeURIComponent(id)}`); const data = response.ok ? await response.json() as { poll?: MovieNightPoll | null } : null; setPoll(data?.poll ?? null); setLoading(false); };
+  useEffect(() => { void loadPoll(); }, [groupId]);
+  const find = async () => { if (query.trim().length < 2) { setMessage("Type at least two letters to find a title."); return; } const response = await fetch(`/api/tmdb?mode=search&query=${encodeURIComponent(query.trim())}`); const data = response.ok ? await response.json() as { results?: EditorialTitle[] } : null; setMatches((data?.results ?? []).filter(item => item.type === "movie" || item.type === "tv")); };
+  const addChoice = (item: EditorialTitle) => { if (choices.length >= 5) { setMessage("A Movie Night can have up to five options."); return; } if (!choices.some(choice => choice.id === item.id && choice.type === item.type)) setChoices(current => [...current, item]); setMatches([]); setQuery(""); };
+  const create = async (event: React.FormEvent) => { event.preventDefault(); if (!groupId || saving) return; setSaving(true); setMessage(""); const response = await fetch("/api/movie-nights", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId, question, options: choices.map(choice => ({ tmdbId: choice.id, type: choice.type, name: choice.title, year: choice.year ? Number(choice.year) : null, posterPath: choice.image })) }) }); const data = await response.json() as { error?: string }; if (!response.ok) { setMessage(data.error ?? "Movie Night could not be created."); setSaving(false); return; } setChoices([]); setCreating(false); setSaving(false); setMessage(""); await loadPoll(); };
+  const vote = async (optionId: string) => { if (!poll || saving) return; setSaving(true); const response = await fetch("/api/movie-nights", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pollId: poll.id, optionId }) }); const data = await response.json() as { error?: string }; if (!response.ok) setMessage(data.error ?? "Your vote could not be saved."); await loadPoll(); setSaving(false); };
+  const selectedGroup = groups.find(group => group.id === groupId);
+  return <section className="page movie-night-page"><Intro label="MOVIE NIGHT" title="Decide together." text="Start a pick, let your people vote, then make the night happen." action={groups.length && !poll ? <button className="primary" onClick={() => { setCreating(true); setMessage(""); }}>+ Start Movie Night</button> : null}/>{groups.length ? <><div className="tabs movie-night-groups">{groups.map(group => <button key={group.id} className={group.id === groupId ? "chosen" : ""} onClick={() => { setGroupId(group.id); setCreating(false); }}>{group.name}</button>)}</div>{loading ? <div className="panel movie-night-loading">Loading {selectedGroup?.name ?? "group"}'s Movie Night…</div> : creating ? <form className="panel movie-night-builder" onSubmit={create}><p className="eyebrow">{selectedGroup?.name ?? "YOUR GROUP"}</p><h2>Start a Movie Night</h2><label>QUESTION<input value={question} onChange={event => setQuestion(event.target.value)} maxLength={180}/></label><label>ADD 3–5 TITLES<div className="editor-title-search"><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search movie or TV show"/><button type="button" className="secondary" onClick={() => void find()}>Find</button></div></label>{matches.length > 0 && <div className="editor-matches">{matches.map(item => <button key={`${item.type}-${item.id}`} type="button" onClick={() => addChoice(item)}>{item.image ? <img src={item.image} alt=""/> : <span>◉</span>}<div><b>{item.title}</b><small>{item.subtitle}</small></div></button>)}</div>}<div className="movie-night-choices">{choices.length ? choices.map((item, index) => <article key={`${item.type}-${item.id}`}>{item.image ? <img src={item.image} alt=""/> : <span>{index + 1}</span>}<b>{item.title}</b><button type="button" onClick={() => setChoices(current => current.filter(choice => choice.id !== item.id || choice.type !== item.type))}>×</button></article>) : <p>Pick at least three choices for your group.</p>}</div><div><button type="button" className="secondary" onClick={() => setCreating(false)}>Cancel</button><button className="primary" disabled={saving}>{saving ? "Starting…" : "Start the vote"}</button></div>{message && <small>{message}</small>}</form> : poll ? <section className="panel movie-night-poll"><div className="movie-night-poll-head"><div><p className="eyebrow">{selectedGroup?.name ?? "YOUR GROUP"} · {poll.totalVotes} {poll.totalVotes === 1 ? "vote" : "votes"}</p><h2>{poll.question}</h2><span>Started by {poll.creator}. Everyone gets one vote.</span></div><button className="secondary" onClick={() => { setCreating(true); setPoll(null); }}>New Movie Night</button></div><div className="movie-night-options">{poll.options.map((option, index) => <article className={option.selected ? "selected" : ""} key={option.id}>{option.posterPath ? <img src={option.posterPath} alt=""/> : <span>{index + 1}</span>}<div><b>{option.title}</b><small>{option.type === "tv" ? "TV series" : "Movie"}{option.year ? ` · ${option.year}` : ""}</small><div className="movie-night-voters">{option.voters.map(voter => <Avatar key={voter.id} imageUrl={voter.avatarUrl}>{voter.displayName.slice(0, 2).toUpperCase()}</Avatar>)}{option.votes ? <em>{option.votes} {option.votes === 1 ? "vote" : "votes"}</em> : <em>Be first to vote</em>}</div></div><button className={option.selected ? "secondary" : "primary"} disabled={saving} onClick={() => void vote(option.id)}>{option.selected ? "Your pick" : "Vote"}</button></article>)}</div></section> : <div className="panel movie-night-empty"><div><b>No Movie Night is running yet.</b><p>Start a friendly vote and give everyone a say in the next group watch.</p></div><button className="primary" onClick={() => setCreating(true)}>Start Movie Night</button></div>}</> : <div className="panel movie-night-empty"><div><b>Movie Nights happen in groups.</b><p>Create a family, friend, or movie-night group first—then everyone can vote on what to watch.</p></div></div>}</section>;
 }
 
 function FriendProfileModal({ friend, onClose }: { friend: CircleFriend; onClose: () => void }) {

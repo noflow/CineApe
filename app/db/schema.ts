@@ -8,8 +8,9 @@ const timestamps = {
 export const titleType = pgEnum("title_type", ["movie", "tv"]);
 export const recommendationStatus = pgEnum("recommendation_status", ["pending", "watching", "watched", "not_interested"]);
 export const libraryStatus = pgEnum("library_status", ["watchlist", "watching", "completed"]);
-export const notificationKind = pgEnum("notification_kind", ["recommendation", "group_join", "streaming"]);
+export const notificationKind = pgEnum("notification_kind", ["recommendation", "group_join", "streaming", "chat"]);
 export const editorialStatus = pgEnum("editorial_status", ["draft", "published"]);
+export const movieNightStatus = pgEnum("movie_night_status", ["open", "closed"]);
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -74,6 +75,42 @@ export const groupTitlePicks = pgTable("group_title_picks", {
   addedBy: uuid("added_by").notNull().references(() => users.id, { onDelete: "cascade" }),
   ...timestamps,
 }, (table) => [uniqueIndex("group_title_picks_group_title_unique").on(table.groupId, table.titleId)]);
+
+export const chatMessages = pgTable("chat_messages", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  senderId: uuid("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Direct messages have a recipient; group messages use groupId instead.
+  recipientId: uuid("recipient_id").references(() => users.id, { onDelete: "cascade" }),
+  groupId: uuid("group_id").references(() => groups.id, { onDelete: "cascade" }),
+  body: text("body").notNull().default(""),
+  titleId: uuid("title_id").references(() => titles.id, { onDelete: "set null" }),
+  ...timestamps,
+});
+
+export const movieNightPolls = pgTable("movie_night_polls", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),
+  createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  question: text("question").notNull(),
+  status: movieNightStatus("status").default("open").notNull(),
+  closesAt: timestamp("closes_at", { withTimezone: true }),
+  ...timestamps,
+});
+
+export const movieNightOptions = pgTable("movie_night_options", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  pollId: uuid("poll_id").notNull().references(() => movieNightPolls.id, { onDelete: "cascade" }),
+  titleId: uuid("title_id").notNull().references(() => titles.id, { onDelete: "cascade" }),
+  addedBy: uuid("added_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  ...timestamps,
+}, (table) => [uniqueIndex("movie_night_options_poll_title_unique").on(table.pollId, table.titleId)]);
+
+export const movieNightVotes = pgTable("movie_night_votes", {
+  pollId: uuid("poll_id").notNull().references(() => movieNightPolls.id, { onDelete: "cascade" }),
+  optionId: uuid("option_id").notNull().references(() => movieNightOptions.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [primaryKey({ columns: [table.pollId, table.userId] })]);
 
 export const recommendations = pgTable("recommendations", {
   id: uuid("id").defaultRandom().primaryKey(),

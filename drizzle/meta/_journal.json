@@ -50,6 +50,20 @@
       "when": 1784857134663,
       "tag": "0006_nappy_paladin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784873730293,
+      "tag": "0007_strong_wraith",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784876211489,
+      "tag": "0008_small_ted_forrester",
+      "breakpoints": true
     }
   ]
 }

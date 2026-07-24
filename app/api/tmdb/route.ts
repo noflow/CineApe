@@ -23,6 +23,7 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const query = params.get("query")?.trim().slice(0, 80);
   const mode = params.get("mode");
+  const page = Math.min(Math.max(Number(params.get("page")) || 1, 1), 500);
   const id = Number(params.get("id"));
   const person = params.get("person")?.trim().slice(0, 100);
   const type = params.get("type") === "tv" ? "tv" : "movie";
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
       const responses = await Promise.all(endpoints.map(async endpoint => {
         const url = new URL(`${API_BASE}${endpoint.path}`);
         url.searchParams.set("language", "en-US");
-        url.searchParams.set("page", "1");
+        url.searchParams.set("page", String(page));
         url.searchParams.set("region", country);
         url.searchParams.set("sort_by", "popularity.desc");
         url.searchParams.set("with_original_language", "en");
@@ -75,13 +76,13 @@ export async function GET(request: Request) {
         return { endpoint, response: await fetch(url, { headers, next: { revalidate: 60 * 60 * 6 } }) };
       }));
       if (responses.some(({ response }) => !response.ok)) return Response.json({ titles: [] }, { status: 502 });
-      const collections = await Promise.all(responses.map(async ({ endpoint, response }) => ({ type: endpoint.type, items: (await response.json() as { results?: SearchItem[] }).results ?? [] })));
+      const collections = await Promise.all(responses.map(async ({ endpoint, response }) => { const data = await response.json() as { results?: SearchItem[]; total_pages?: number }; return { type: endpoint.type, items: data.results ?? [], totalPages: data.total_pages ?? page }; }));
       const titles = collections.flatMap(collection => collection.items.filter(item => item.poster_path && (!item.original_language || item.original_language === "en")).slice(0, 20).map(item => ({
         id: item.id, type: collection.type, title: item.title ?? item.name ?? "Untitled",
         year: item.release_date?.slice(0, 4) ?? item.first_air_date?.slice(0, 4) ?? null,
         image: poster(item.poster_path), score: item.vote_average ? item.vote_average.toFixed(1) : "—",
       }))).sort((a, b) => Number(b.score) - Number(a.score));
-      return Response.json({ titles: titles.slice(0, 24) }, { headers: { "Cache-Control": "public, max-age=900, s-maxage=21600" } });
+      return Response.json({ titles: titles.slice(0, 24), page, hasMore: collections.some(collection => page < collection.totalPages) }, { headers: { "Cache-Control": "public, max-age=900, s-maxage=21600" } });
     }
     if (person) {
       const searchUrl = new URL(`${API_BASE}/search/person`);

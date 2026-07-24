@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { db } from "../../db";
-import { friendships, invitations, users } from "../../db/schema";
+import { friendships, invitations, notifications, users } from "../../db/schema";
 
 async function memberFor(clerkUserId: string) {
   if (!db) return null;
@@ -42,5 +42,11 @@ export async function PATCH(request: Request) {
   await db.insert(friendships).values([{ userId: invite.createdBy, friendId: member.id }, { userId: member.id, friendId: invite.createdBy }]).onConflictDoNothing();
   const updated = await db.update(invitations).set({ acceptedBy: member.id, acceptedAt: new Date(), updatedAt: new Date() }).where(and(eq(invitations.id, invite.id), isNull(invitations.acceptedAt), gt(invitations.expiresAt, new Date()))).returning({ id: invitations.id });
   if (!updated.length) return Response.json({ error: "This invite has already been used." }, { status: 409 });
+  await db.insert(notifications).values({
+    userId: invite.createdBy,
+    kind: "group_join",
+    message: `${member.displayName} joined your CineApe circle.`,
+    link: `circle-join:${member.id}`,
+  });
   return Response.json({ status: "connected", senderName: invite.senderName });
 }

@@ -1,7 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { count, eq } from "drizzle-orm";
 import { db } from "../../db";
-import { friendships, recommendations, titleRatings, users } from "../../db/schema";
+import { friendships, notifications, recommendations, titleRatings, users } from "../../db/schema";
 
 async function currentMember() {
   const { userId } = await auth();
@@ -62,5 +62,9 @@ export async function PATCH(request: Request) {
   const bio = body.bio?.trim().slice(0, 280) || null;
   if (!displayName || displayName.length < 2) return Response.json({ error: "Choose a display name with at least two characters." }, { status: 400 });
   await db.update(users).set({ displayName, bio, updatedAt: new Date() }).where(eq(users.id, member.id));
+  // An email sign-up may choose their name immediately after accepting an invite.
+  // Keep the inviter's join notification personal instead of leaving the placeholder name there.
+  await db.update(notifications).set({ message: `${displayName} joined your CineApe circle.`, updatedAt: new Date() })
+    .where(eq(notifications.link, `circle-join:${member.id}`));
   return Response.json({ profile: { displayName, avatarUrl: member.avatarUrl, bio } });
 }
