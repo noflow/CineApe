@@ -24,6 +24,7 @@ export async function GET(request: Request) {
   const query = params.get("query")?.trim().slice(0, 80);
   const mode = params.get("mode");
   const id = Number(params.get("id"));
+  const person = params.get("person")?.trim().slice(0, 100);
   const type = params.get("type") === "tv" ? "tv" : "movie";
   const edgeCountry = request.headers.get("cf-ipcountry") ?? request.headers.get("x-vercel-ip-country");
   const requestedCountry = params.get("country")?.toUpperCase();
@@ -82,6 +83,27 @@ export async function GET(request: Request) {
       }))).sort((a, b) => Number(b.score) - Number(a.score));
       return Response.json({ titles: titles.slice(0, 24) }, { headers: { "Cache-Control": "public, max-age=900, s-maxage=21600" } });
     }
+    if (person) {
+      const searchUrl = new URL(`${API_BASE}/search/person`);
+      searchUrl.searchParams.set("query", person);
+      searchUrl.searchParams.set("language", "en-US");
+      searchUrl.searchParams.set("include_adult", "false");
+      const headers = { Authorization: `Bearer ${token}`, accept: "application/json" };
+      const searchResponse = await fetch(searchUrl, { headers, next: { revalidate: 60 * 60 * 24 } });
+      if (!searchResponse.ok) return Response.json({ error: "Person details are unavailable." }, { status: 502 });
+      const searchData = await searchResponse.json() as { results?: Array<{ id: number; name: string; profile_path?: string | null }> };
+      const match = searchData.results?.find(item => item.name.toLowerCase() === person.toLowerCase()) ?? searchData.results?.[0];
+      if (!match) return Response.json({ error: "Person not found." }, { status: 404 });
+      const personResponse = await fetch(`${API_BASE}/person/${match.id}?language=en-US&append_to_response=combined_credits`, { headers, next: { revalidate: 60 * 60 * 24 } });
+      if (!personResponse.ok) return Response.json({ error: "Person details are unavailable." }, { status: 502 });
+      const data = await personResponse.json() as { name?: string; profile_path?: string | null; known_for_department?: string; biography?: string; combined_credits?: { cast?: Array<{ id: number; media_type?: "movie" | "tv"; title?: string; name?: string; release_date?: string; first_air_date?: string; poster_path?: string | null; character?: string }> } };
+      const credits = (data.combined_credits?.cast ?? []).filter(item => (item.media_type === "movie" || item.media_type === "tv") && (item.title || item.name)).map(item => ({
+        id: item.id, type: item.media_type as "movie" | "tv", title: item.title ?? item.name ?? "Untitled",
+        year: item.release_date?.slice(0, 4) ?? item.first_air_date?.slice(0, 4) ?? null, image: poster(item.poster_path, "w185"), character: item.character ?? "",
+      })).sort((a, b) => Number(b.year ?? 0) - Number(a.year ?? 0));
+      return Response.json({ id: match.id, name: data.name ?? match.name, image: poster(data.profile_path ?? match.profile_path, "w342"), department: data.known_for_department ?? "Cast", biography: data.biography?.slice(0, 520) ?? "", filmography: { movies: credits.filter(item => item.type === "movie"), tv: credits.filter(item => item.type === "tv") } }, { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400" } });
+    }
+
     if (id) {
       const response = await fetch(`${API_BASE}/${type}/${id}?language=en-US&append_to_response=credits,videos,watch/providers`, {
         headers: { Authorization: `Bearer ${token}`, accept: "application/json" },
