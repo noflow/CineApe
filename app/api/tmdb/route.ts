@@ -129,6 +129,7 @@ export async function GET(request: Request) {
         title?: string; name?: string; release_date?: string; first_air_date?: string; overview?: string;
         poster_path?: string | null; backdrop_path?: string | null; vote_average?: number; vote_count?: number;
         runtime?: number; episode_run_time?: number[]; genres?: Array<{ id: number; name: string }>;
+        networks?: Array<{ name: string; logo_path?: string | null }>;
         credits?: { cast?: Array<{ id: number; name: string; character?: string; profile_path?: string | null }> };
         videos?: { results?: Array<{ key: string; site: string; type: string; official?: boolean }> };
         "watch/providers"?: { results?: Record<string, { flatrate?: Array<{ provider_name: string; logo_path?: string | null }>; rent?: Array<{ provider_name: string; logo_path?: string | null }>; buy?: Array<{ provider_name: string; logo_path?: string | null }>; link?: string }> };
@@ -136,13 +137,18 @@ export async function GET(request: Request) {
       const trailer = data.videos?.results?.find(video => video.site === "YouTube" && video.type === "Trailer" && video.official)
         ?? data.videos?.results?.find(video => video.site === "YouTube" && video.type === "Trailer");
       const providers = data["watch/providers"]?.results?.[country];
-      const priority = ["Netflix", "Amazon Prime Video", "Disney Plus", "Apple TV", "Paramount Plus", "Paramount+", "Crave", "Hulu", "Max", "Max Amazon Channel", "Peacock Premium"];
+      const priority = ["Netflix", "Apple TV", "Disney Plus", "Paramount Plus", "Paramount+", "Crave", "Hulu", "Max", "Peacock Premium", "Amazon Prime Video", "Max Amazon Channel"];
       const streaming = providers?.flatrate ?? [];
-      const primaryProvider = [...streaming].sort((a, b) => {
+      const rankedProvider = [...streaming].sort((a, b) => {
         const aIndex = priority.findIndex(name => a.provider_name === name);
         const bIndex = priority.findIndex(name => b.provider_name === name);
         return (aIndex === -1 ? priority.length : aIndex) - (bIndex === -1 ? priority.length : bIndex);
       })[0] ?? null;
+      // For an Apple original, Apple TV is the canonical service even if TMDB also
+      // lists it through an Amazon Channel or another secondary subscription path.
+      const originalNetwork = type === "tv" ? data.networks?.find(network => /apple\s*tv/i.test(network.name)) : null;
+      const appleProvider = streaming.find(provider => /apple\s*tv/i.test(provider.provider_name));
+      const primaryProvider = originalNetwork ? appleProvider ?? { provider_name: originalNetwork.name, logo_path: originalNetwork.logo_path } : rankedProvider;
       return Response.json({
         id, type, configured: true, title: data.title ?? data.name ?? "Untitled", overview: data.overview ?? "",
         year: data.release_date?.slice(0, 4) ?? data.first_air_date?.slice(0, 4) ?? null,

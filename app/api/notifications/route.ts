@@ -4,7 +4,7 @@ import { db } from "../../db";
 import { notifications, titles, userTitleStates, users } from "../../db/schema";
 
 const API_BASE = "https://api.themoviedb.org/3";
-const primaryServices = ["Netflix", "Amazon Prime Video", "Disney Plus", "Apple TV", "Paramount Plus", "Paramount+", "Crave", "Hulu", "Max", "Peacock Premium"];
+const primaryServices = ["Netflix", "Apple TV", "Disney Plus", "Paramount Plus", "Paramount+", "Crave", "Hulu", "Max", "Peacock Premium", "Amazon Prime Video"];
 
 async function memberFor(clerkUserId: string) {
   if (!db) return null;
