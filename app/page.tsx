@@ -170,6 +170,13 @@ export default function Home() {
     {toast && <div className="toast">{toast}</div>}
   </div>;
 }
+function clerkProfileError(error: unknown) {
+  const first = typeof error === "object" && error && "errors" in error && Array.isArray((error as { errors?: unknown[] }).errors) ? (error as { errors: Array<{ code?: string; longMessage?: string; message?: string }> }).errors[0] : null;
+  if (first?.code === "form_identifier_not_enabled") return "Usernames are not enabled in Clerk yet. Enable Username in Clerk’s User & authentication settings, then try again.";
+  if (first?.code === "form_identifier_exists") return "That username is already taken. Please try another one.";
+  return first?.longMessage || first?.message || "Clerk could not save this profile. Please try again.";
+}
+
 function DisplayNameModal({ suggestedUsername, onSaved }: { suggestedUsername: string; onSaved: (name: string) => void }) {
   const { user } = useUser();
   const [firstName, setFirstName] = useState(() => user?.firstName ?? "");
@@ -192,12 +199,15 @@ function DisplayNameModal({ suggestedUsername, onSaved }: { suggestedUsername: s
     setSaving(true);
     setMessage("");
     try {
-      if (user) await user.update({ firstName: cleanFirstName, lastName: cleanLastName, username: cleanUsername });
+      if (user) {
+        await user.update({ firstName: cleanFirstName, lastName: cleanLastName });
+        await user.update({ username: cleanUsername });
+      }
       const response = await fetch("/api/account", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName }) });
       const data = await response.json() as { error?: string; profile?: { displayName?: string } };
       if (!response.ok || !data.profile?.displayName) { setMessage(data.error ?? "Your display name could not be saved."); return; }
       onSaved(data.profile.displayName);
-    } catch { setMessage("That username is not available. Please choose another one."); }
+    } catch (error) { setMessage(clerkProfileError(error)); }
     finally { setSaving(false); }
   };
 
