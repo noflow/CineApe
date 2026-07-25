@@ -23,12 +23,12 @@ export async function GET(request: Request) {
   const tmdbId = Number(params.get("tmdbId"));
   const type = params.get("type");
   if (Number.isInteger(tmdbId) && tmdbId > 0 && (type === "movie" || type === "tv")) {
-    const [entry] = await db.select({ status: userTitleStates.status })
+    const [entry] = await db.select({ status: userTitleStates.status, currentSeason: userTitleStates.currentSeason, currentEpisode: userTitleStates.currentEpisode })
       .from(userTitleStates)
       .innerJoin(titles, eq(userTitleStates.titleId, titles.id))
       .where(and(eq(userTitleStates.userId, member.id), eq(titles.tmdbId, tmdbId), eq(titles.type, type)))
       .limit(1);
-    return Response.json({ status: entry?.status ?? null });
+    return Response.json({ status: entry?.status ?? null, currentSeason: entry?.currentSeason ?? null, currentEpisode: entry?.currentEpisode ?? null });
   }
 
   const status = params.get("status");
@@ -36,6 +36,8 @@ export async function GET(request: Request) {
   const entries = await db.select({
     id: userTitleStates.titleId,
     status: userTitleStates.status,
+    currentSeason: userTitleStates.currentSeason,
+    currentEpisode: userTitleStates.currentEpisode,
     updatedAt: userTitleStates.updatedAt,
     tmdbId: titles.tmdbId,
     title: titles.name,
@@ -56,7 +58,7 @@ export async function POST(request: Request) {
   const member = await memberFor(userId);
   if (!member) return Response.json({ error: "Profile not found." }, { status: 404 });
 
-  const body = await request.json() as { tmdbId?: number; type?: string; name?: string; year?: number | null; posterPath?: string | null; status?: LibraryStatus | null };
+  const body = await request.json() as { tmdbId?: number; type?: string; name?: string; year?: number | null; posterPath?: string | null; status?: LibraryStatus | null; currentSeason?: number | null; currentEpisode?: number | null };
   if (!Number.isInteger(body.tmdbId) || !body.name?.trim() || (body.type !== "movie" && body.type !== "tv") || (body.status !== null && !statuses.includes(body.status as LibraryStatus))) {
     return Response.json({ error: "A valid title and library status are required." }, { status: 400 });
   }
@@ -68,11 +70,13 @@ export async function POST(request: Request) {
   if (!title) return Response.json({ error: "Title could not be saved." }, { status: 500 });
 
   const nextStatus = body.status ?? null;
+  const currentSeason = nextStatus === "watching" && body.type === "tv" && Number.isInteger(body.currentSeason) && body.currentSeason! > 0 ? body.currentSeason : null;
+  const currentEpisode = nextStatus === "watching" && body.type === "tv" && Number.isInteger(body.currentEpisode) && body.currentEpisode! > 0 ? body.currentEpisode : null;
   if (nextStatus === null) {
     await db.delete(userTitleStates).where(and(eq(userTitleStates.userId, member.id), eq(userTitleStates.titleId, title.id)));
   } else {
-    await db.insert(userTitleStates).values({ userId: member.id, titleId: title.id, status: nextStatus })
-      .onConflictDoUpdate({ target: [userTitleStates.userId, userTitleStates.titleId], set: { status: nextStatus, updatedAt: new Date() } });
+    await db.insert(userTitleStates).values({ userId: member.id, titleId: title.id, status: nextStatus, currentSeason, currentEpisode })
+      .onConflictDoUpdate({ target: [userTitleStates.userId, userTitleStates.titleId], set: { status: nextStatus, currentSeason, currentEpisode, updatedAt: new Date() } });
   }
-  return Response.json({ status: nextStatus });
+  return Response.json({ status: nextStatus, currentSeason, currentEpisode });
 }

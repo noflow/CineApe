@@ -26,10 +26,13 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     .from(titleRatings).innerJoin(titles, eq(titleRatings.titleId, titles.id)).where(eq(titleRatings.userId, friendId)).orderBy(desc(titleRatings.updatedAt)).limit(6);
   const completed = await db.select({ title: titles.name, type: titles.type, year: titles.releaseYear, posterPath: titles.posterPath })
     .from(userTitleStates).innerJoin(titles, eq(userTitleStates.titleId, titles.id)).where(and(eq(userTitleStates.userId, friendId), eq(userTitleStates.status, "completed"))).orderBy(desc(userTitleStates.updatedAt)).limit(6);
+  const currentlyWatching = await db.select({ title: titles.name, year: titles.releaseYear, posterPath: titles.posterPath, currentSeason: userTitleStates.currentSeason, currentEpisode: userTitleStates.currentEpisode })
+    .from(userTitleStates).innerJoin(titles, eq(userTitleStates.titleId, titles.id))
+    .where(and(eq(userTitleStates.userId, friendId), eq(userTitleStates.status, "watching"), eq(titles.type, "tv"))).orderBy(desc(userTitleStates.updatedAt)).limit(6);
   const friendRows = directConnection && profile.friendListVisible ? await db.select({ id: friendships.friendId }).from(friendships).where(eq(friendships.userId, friendId)) : [];
   const friendIds = friendRows.map(row => row.id).filter(id => id !== viewer.id);
   const listedFriends = friendIds.length ? await db.select({ id: users.id, displayName: users.displayName, username: users.username, avatarUrl: users.avatarUrl, bio: users.bio }).from(users).where(inArray(users.id, friendIds)) : [];
   const viewerFriendSet = new Set(viewerFriendIds);
   const friends = listedFriends.map(person => ({ ...person, mutualCount: viewerFriendSet.has(person.id) ? 1 : 0, relationship: viewerFriendSet.has(person.id) ? "friend" : "none" }));
-  return Response.json({ profile, connectionLevel: directConnection ? "friend" : "mutual", stats: { ratings: ratings?.value ?? 0, sent: sent?.value ?? 0, received: received?.value ?? 0 }, recentRatings, completed, friendsVisible: directConnection && profile.friendListVisible, friends }, { headers: { "Cache-Control": "no-store" } });
+  return Response.json({ profile, connectionLevel: directConnection ? "friend" : "mutual", stats: { ratings: ratings?.value ?? 0, sent: sent?.value ?? 0, received: received?.value ?? 0 }, recentRatings, completed, currentlyWatching, friendsVisible: directConnection && profile.friendListVisible, friends }, { headers: { "Cache-Control": "no-store" } });
 }

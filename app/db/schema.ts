@@ -39,6 +39,8 @@ export const userTitleStates = pgTable("user_title_states", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   titleId: uuid("title_id").notNull().references(() => titles.id, { onDelete: "cascade" }),
   status: libraryStatus("status").notNull(),
+  currentSeason: integer("current_season"),
+  currentEpisode: integer("current_episode"),
   ...timestamps,
 }, (table) => [primaryKey({ columns: [table.userId, table.titleId] })]);
 

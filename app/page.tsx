@@ -153,7 +153,7 @@ export default function Home() {
 
     {page === "Title" && <TitleDetails selection={selectedTitle} onBack={() => setPage("Discover")} onRecommend={(title) => chooseShareTitle(title, "recommend")} onAddToGroup={(title) => chooseShareTitle(title, "groupPick")}/>} 
 
-    {page === "For You" && <ForYouPage onInvite={() => setInviteOpen(true)} onOpen={openTitle} />}
+    {page === "For You" && <ForYouTrackingPage onInvite={() => setInviteOpen(true)} onOpen={openTitle} />}
 
     {page === "Friends & Groups" && <CirclePage onInvite={() => setInviteOpen(true)} onOpen={openTitle} />}
 
@@ -560,6 +560,7 @@ type FriendProfileData = {
   stats: { ratings: number; sent: number; received: number };
   recentRatings: Array<{ title: string; type: "movie" | "tv"; year: number | null; posterPath: string | null; score: number; review: string | null; updatedAt: string }>;
   completed: Array<{ title: string; type: "movie" | "tv"; year: number | null; posterPath: string | null }>;
+  currentlyWatching: Array<{ title: string; year: number | null; posterPath: string | null; currentSeason: number | null; currentEpisode: number | null }>;
 };
 
 function CirclePageBase({ onInvite }: { onInvite: () => void }) {
@@ -619,12 +620,35 @@ function ProfileChatBox({ friend, onRead }: { friend: CircleFriend; onRead: () =
   return <section className="profile-chat"><h3>Message {friend.displayName}</h3><div className="profile-chat-messages">{loading ? <p>Loading conversation…</p> : messages.length ? messages.map(message => <article key={message.id} className={message.sender.id === viewerId ? "mine" : ""}><b>{message.sender.id === viewerId ? "You" : message.sender.displayName}</b>{message.body && <p>{message.body}</p>}{message.title && <small>Shared: {message.title.name}</small>}</article>) : <p>Say hello and start your CineApe conversation.</p>}</div><form onSubmit={send}><textarea value={draft} onChange={event => setDraft(event.target.value)} placeholder={`Message ${friend.displayName}`} maxLength={2000}/><button className="primary" disabled={sending || !draft.trim()}>{sending ? "Sending…" : "Send"}</button></form>{notice && <small className="modal-message">{notice}</small>}</section>;
 }
 
-function FriendChatProfileModal({ friend, onClose, onRead }: { friend: CircleFriend; onClose: () => void; onRead: () => void }) {
+function FriendChatProfileModalLegacy({ friend, onClose, onRead }: { friend: CircleFriend; onClose: () => void; onRead: () => void }) {
   const [data, setData] = useState<FriendProfileData | null>(null);
   const [error, setError] = useState("");
   useEffect(() => { let active = true; void fetch(`/api/friends/${friend.id}`).then(response => response.ok ? response.json() as Promise<FriendProfileData> : Promise.reject(new Error("Profile unavailable."))).then(value => { if (active) setData(value); }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Profile unavailable."); }); return () => { active = false; }; }, [friend.id]);
   const initials = friend.displayName.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
   return <div className="backdrop" onClick={onClose}><div className="modal friend-profile-modal chat-profile-modal" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button>{error && <p className="share-empty">{error}</p>}{!data && !error && <p className="share-empty">Loading {friend.displayName}'s profile…</p>}{data && <><div className="friend-profile-heading"><Avatar imageUrl={data.profile.avatarUrl}>{initials}</Avatar><div><p className="eyebrow">IN YOUR CINEAPE CIRCLE</p><h2>{data.profile.displayName}</h2><p>{data.profile.bio || "Watching, rating, and sharing great picks."}</p></div></div><div className="friend-profile-stats"><b>{data.stats.ratings}<span>Ratings</span></b><b>{data.stats.sent}<span>Sent</span></b><b>{data.stats.received}<span>Received</span></b></div><ProfileChatBox friend={friend} onRead={onRead}/></>}</div></div>;
+}
+
+function FriendChatProfileModal({ friend, onClose, onRead }: { friend: CircleFriend; onClose: () => void; onRead: () => void }) {
+  const [data, setData] = useState<FriendProfileData | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void fetch(`/api/friends/${friend.id}`)
+      .then(response => response.ok ? response.json() as Promise<FriendProfileData> : response.json().then((value: { error?: string }) => Promise.reject(new Error(value.error ?? "Profile unavailable."))))
+      .then(value => { if (active) setData(value); })
+      .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Profile unavailable."); });
+    return () => { active = false; };
+  }, [friend.id]);
+
+  const initials = friend.displayName.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
+  return <div className="backdrop" onClick={onClose}><div className="modal friend-profile-modal chat-profile-modal" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button>
+    {error && <p className="share-empty">{error}</p>}
+    {!data && !error && <p className="share-empty">Loading {friend.displayName}'s profile…</p>}
+    {data && <><div className="friend-profile-heading"><Avatar imageUrl={data.profile.avatarUrl}>{initials}</Avatar><div><p className="eyebrow">IN YOUR CINEAPE CIRCLE</p><h2>{data.profile.displayName}</h2><p>{data.profile.bio || "Watching, rating, and sharing great picks."}</p></div></div><div className="friend-profile-stats"><b>{data.stats.ratings}<span>Ratings</span></b><b>{data.stats.sent}<span>Sent</span></b><b>{data.stats.received}<span>Received</span></b></div>
+      <section className="friend-watching"><h3>Currently watching</h3>{data.currentlyWatching.length ? <div>{data.currentlyWatching.map(item => <article key={item.title}>{item.posterPath ? <img src={item.posterPath} alt=""/> : <span>TV</span>}<div><b>{item.title}</b><small>{item.currentSeason && item.currentEpisode ? `Up to Season ${item.currentSeason}, Episode ${item.currentEpisode}` : "Watching now"}</small></div></article>)}</div> : <p className="profile-empty">No TV shows marked as watching yet.</p>}</section>
+      <ProfileChatBox friend={friend} onRead={onRead}/>
+    </>}</div></div>;
 }
 
 function CompactCirclePage({ onInvite }: { onInvite: () => void }) {
@@ -742,7 +766,7 @@ function HomeCategories({ onOpen, onInvite }: { onOpen: (title?: string, meta?: 
   return <div className="home-categories">{shelf("New release movies", "Fresh films now playing and arriving soon.", movies)}{shelf("New release TV shows", "New and returning series to start tonight.", shows)}<section className="home-shelf friends-shelf"><div className="section-title"><div><h2>What your friends are currently watching</h2><p>Updates from the people in your Circle.</p></div></div><div className="panel friends-empty"><div><b>Your Circle is ready when they are.</b><p>Invite family and friends to see what they are watching, saving, and recommending.</p></div><button className="primary" onClick={onInvite}>Invite people</button></div></section></div>;
 }
 type LiveRecommendation = { id: string; status: "pending" | "watching" | "watched" | "not_interested"; note: string | null; title: string; type: "movie" | "tv"; year: number | null; person: { displayName: string; avatarUrl: string | null } | null };
-type LibraryEntry = { id: string; status: "watchlist" | "watching" | "completed"; tmdbId: number; title: string; type: "movie" | "tv"; year: number | null; posterPath: string | null };
+type LibraryEntry = { id: string; status: "watchlist" | "watching" | "completed"; tmdbId: number; title: string; type: "movie" | "tv"; year: number | null; posterPath: string | null; currentSeason: number | null; currentEpisode: number | null };
 
 function ForYouPage({ onInvite, onOpen }: { onInvite: () => void; onOpen: (title?: string, meta?: string, score?: string) => void }) {
   const [view, setView] = useState<"received" | "sent" | "watchlist" | "watching" | "completed">("received");
@@ -766,6 +790,77 @@ function ForYouPage({ onInvite, onOpen }: { onInvite: () => void; onOpen: (title
   const emptyText = view === "sent" ? "You have not sent a recommendation yet." : view === "watchlist" ? "Your watchlist is ready for its first great pick." : view === "watching" ? "Nothing is marked as watching yet." : view === "completed" ? "The titles you finish will appear here." : "No one has recommended something to you yet.";
   const listDescription = view === "watchlist" ? "Your personal list of titles to watch next." : view === "watching" ? "The shows and movies you have started." : "Everything you have finished watching.";
   return <section className="page live-inbox"><Intro label={personalList ? "YOUR PERSONAL LISTS" : "YOUR RECOMMENDATIONS"} title={personalList ? (view === "watchlist" ? "Your watchlist." : view === "watching" ? "Currently watching." : "Completed picks.") : "From people who get you."} text={personalList ? listDescription : "Keep every personal pick, thoughtful note, and your verdict in one place."} action={null}/><div className="tabs live-tabs">{labels.map(tab => <button key={tab.key} className={view === tab.key ? "chosen" : ""} onClick={() => setView(tab.key)}>{tab.label}</button>)}</div>{loading ? <div className="panel inbox-loading">Loading your list…</div> : personalList ? library.length ? <div className="panel inbox live-inbox-list personal-library-list">{library.map(item => <article key={item.id}><button className="inbox-cover library-cover" onClick={() => onOpen(item.title, `${item.year ?? "—"} · ${item.type === "tv" ? "TV series" : "Movie"}`, "—")} aria-label={`Open ${item.title}`}>{item.posterPath && <img src={item.posterPath} alt="" />}</button><div><h3>{item.title}</h3><p>{item.type === "tv" ? "TV series" : "Movie"}{item.year ? ` · ${item.year}` : ""}</p></div><strong className={`library-status ${item.status}`}><span>{item.status === "watchlist" ? "☷" : item.status === "watching" ? "◉" : "✓"}</span>{item.status === "watchlist" ? "Watchlist" : item.status === "watching" ? "Watching" : "Completed"}</strong></article>)}</div> : <div className="panel inbox-empty"><div><b>{emptyText}</b><p>Open a title and add it to this personal list whenever you want to come back to it.</p></div></div> : recommendations.length ? <div className="panel inbox live-inbox-list">{recommendations.map(item => <article key={item.id}><button className="inbox-cover" onClick={() => onOpen(item.title, `${item.year ?? "—"} · ${item.type === "tv" ? "TV series" : "Movie"}`, "—")} aria-label={`Open ${item.title}`}></button><div><h3>{item.title}</h3><p>{view === "sent" ? "Sent to" : "From"} <b>{item.person?.displayName ?? "a CineApe member"}</b> · {item.type === "tv" ? "TV series" : "Movie"}{item.year ? ` · ${item.year}` : ""}</p>{item.note && <em>“{item.note}”</em>}</div>{view === "received" ? <div>{item.status === "pending" && <button className="small-primary" onClick={() => void update(item.id, "watching")}>Start watching</button>}{item.status === "watching" && <button className="small-primary" onClick={() => void update(item.id, "watched")}>Mark watched</button>}</div> : <strong className="rec-status">{item.status === "watched" ? "Watched" : "Sent"}</strong>}</article>)}</div> : <div className="panel inbox-empty"><div><b>{emptyText}</b><p>Invite your people and share your first recommendation when you find a title they will love.</p></div><button className="primary" onClick={onInvite}>Invite people</button></div>}</section>;
+}
+
+function ForYouTrackingPage({ onInvite, onOpen }: { onInvite: () => void; onOpen: (title?: string, meta?: string, score?: string) => void }) {
+  const [view, setView] = useState<"received" | "sent" | "watchlist" | "watching" | "completed">("received");
+  const [recommendations, setRecommendations] = useState<LiveRecommendation[]>([]);
+  const [library, setLibrary] = useState<LibraryEntry[]>([]);
+  const [continueWatching, setContinueWatching] = useState<LibraryEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [season, setSeason] = useState(1);
+  const [episode, setEpisode] = useState(1);
+  const personalList = view === "watchlist" || view === "watching" || view === "completed";
+
+  const load = () => {
+    setLoading(true);
+    const endpoint = personalList ? `/api/library?status=${view}` : `/api/recommendations?view=${view}`;
+    void Promise.all([
+      fetch(endpoint).then(response => response.ok ? response.json() as Promise<{ recommendations?: LiveRecommendation[]; entries?: LibraryEntry[] }> : null),
+      fetch("/api/library?status=watching").then(response => response.ok ? response.json() as Promise<{ entries?: LibraryEntry[] }> : null),
+    ]).then(([data, watching]) => {
+      setRecommendations(data?.recommendations ?? []);
+      setLibrary(data?.entries ?? []);
+      setContinueWatching((watching?.entries ?? []).filter(item => item.type === "tv"));
+    }).catch(() => {
+      setRecommendations([]); setLibrary([]); setContinueWatching([]);
+    }).finally(() => setLoading(false));
+  };
+
+  useEffect(load, [view]);
+
+  const updateRecommendation = async (id: string, status: "watching" | "watched") => {
+    const response = await fetch("/api/recommendations", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
+    if (response.ok) load();
+  };
+
+  const saveProgress = async (item: LibraryEntry, status: "watching" | "completed" = "watching") => {
+    const response = await fetch("/api/library", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tmdbId: item.tmdbId, type: item.type, name: item.title, year: item.year, posterPath: item.posterPath, status, currentSeason: status === "watching" ? season : null, currentEpisode: status === "watching" ? episode : null }),
+    });
+    if (response.ok) { setEditing(null); load(); }
+  };
+
+  const openProgress = (item: LibraryEntry) => {
+    setEditing(item.id);
+    setSeason(item.currentSeason ?? 1);
+    setEpisode(item.currentEpisode ?? 1);
+  };
+
+  const labels = [{ key: "received", label: "For you" }, { key: "sent", label: "Sent" }, { key: "watchlist", label: "Watchlist" }, { key: "watching", label: "Watching" }, { key: "completed", label: "Completed" }] as const;
+  const emptyText = view === "sent" ? "You have not sent a recommendation yet." : view === "watchlist" ? "Your watchlist is ready for its first great pick." : view === "watching" ? "Nothing is marked as watching yet." : view === "completed" ? "The titles you finish will appear here." : "No one has recommended something to you yet.";
+  const title = personalList ? (view === "watchlist" ? "Your watchlist." : view === "watching" ? "Currently watching." : "Completed picks.") : "From people who get you.";
+  const subtitle = personalList ? (view === "watchlist" ? "Your personal list of titles to watch next." : view === "watching" ? "Update an episode as you go. Your Circle can see the TV shows you are currently watching." : "Everything you have finished watching.") : "Keep every personal pick, thoughtful note, and your verdict in one place.";
+
+  const libraryRow = (item: LibraryEntry) => <article key={item.id} className="tracking-row">
+    <button className="inbox-cover library-cover" onClick={() => onOpen(item.title, `${item.year ?? "—"} · ${item.type === "tv" ? "TV series" : "Movie"}`, "—")} aria-label={`Open ${item.title}`}>{item.posterPath && <img src={item.posterPath} alt="" />}</button>
+    <div><h3>{item.title}</h3><p>{item.type === "tv" ? "TV series" : "Movie"}{item.year ? ` · ${item.year}` : ""}</p>{item.status === "watching" && item.type === "tv" && <small className="episode-progress">{item.currentSeason && item.currentEpisode ? `Up to S${item.currentSeason} · E${item.currentEpisode}` : "Add your episode progress"}</small>}</div>
+    <div className="tracking-actions">
+      {item.status === "watching" && item.type === "tv" && <button className="small-ghost" onClick={() => openProgress(item)}>Update progress</button>}
+      {item.status === "watching" && <button className="small-primary" onClick={() => void saveProgress(item, "completed")}>Mark completed</button>}
+      {editing === item.id && <div className="progress-editor"><label>Season<input type="number" min="1" value={season} onChange={event => setSeason(Math.max(1, Number(event.target.value) || 1))}/></label><label>Episode<input type="number" min="1" value={episode} onChange={event => setEpisode(Math.max(1, Number(event.target.value) || 1))}/></label><button className="small-primary" onClick={() => void saveProgress(item)}>Save</button></div>}
+    </div>
+  </article>;
+
+  return <section className="page live-inbox tracking-inbox">
+    <Intro label={personalList ? "YOUR PERSONAL LISTS" : "YOUR RECOMMENDATIONS"} title={title} text={subtitle} action={null}/>
+    {!loading && continueWatching.length > 0 && <section className="continue-watching"><div className="section-title"><div><p className="eyebrow">KEEP GOING</p><h2>Continue watching</h2></div><button onClick={() => setView("watching")}>View all</button></div><div className="continue-watching-list">{continueWatching.slice(0, 4).map(item => <button key={item.id} onClick={() => { setView("watching"); openProgress(item); }}>{item.posterPath ? <img src={item.posterPath} alt="" /> : <span>TV</span>}<div><b>{item.title}</b><small>{item.currentSeason && item.currentEpisode ? `S${item.currentSeason} · E${item.currentEpisode}` : "Add episode progress"}</small></div></button>)}</div></section>}
+    <div className="tabs live-tabs">{labels.map(tab => <button key={tab.key} className={view === tab.key ? "chosen" : ""} onClick={() => setView(tab.key)}>{tab.label}</button>)}</div>
+    {loading ? <div className="panel inbox-loading">Loading your list…</div> : personalList ? library.length ? <div className="panel inbox live-inbox-list personal-library-list tracking-library">{library.map(libraryRow)}</div> : <div className="panel inbox-empty"><div><b>{emptyText}</b><p>Open a title and add it to this personal list whenever you want to come back to it.</p></div></div> : recommendations.length ? <div className="panel inbox live-inbox-list">{recommendations.map(item => <article key={item.id}><button className="inbox-cover" onClick={() => onOpen(item.title, `${item.year ?? "—"} · ${item.type === "tv" ? "TV series" : "Movie"}`, "—")} aria-label={`Open ${item.title}`}></button><div><h3>{item.title}</h3><p>{view === "sent" ? "Sent to" : "From"} <b>{item.person?.displayName ?? "a CineApe member"}</b> · {item.type === "tv" ? "TV series" : "Movie"}{item.year ? ` · ${item.year}` : ""}</p>{item.note && <em>“{item.note}”</em>}</div>{view === "received" ? <div>{item.status === "pending" && <button className="small-primary" onClick={() => void updateRecommendation(item.id, "watching")}>Start watching</button>}{item.status === "watching" && <button className="small-primary" onClick={() => void updateRecommendation(item.id, "watched")}>Mark watched</button>}</div> : <strong className="rec-status">{item.status === "watched" ? "Watched" : "Sent"}</strong>}</article>)}</div> : <div className="panel inbox-empty"><div><b>{emptyText}</b><p>Invite your people and share your first recommendation when you find a title they will love.</p></div><button className="primary" onClick={onInvite}>Invite people</button></div>}
+  </section>;
 }
 type LiveTitle = { id: number; type: "movie" | "tv"; title: string; overview: string; year: string | null; poster: string | null; tmdbScore: number | null; tmdbVotes: number; runtime: number | null; genres: string[]; trailer: string | null; cast: Array<{ name: string; character: string; image: string | null }>; country: "CA" | "US"; providers: Array<{ name: string; image: string | null }>; providerLink?: string | null };
 type CommunityReview = { score: number; review: string | null; createdAt: string; displayName: string; avatarUrl: string | null };
@@ -854,7 +949,8 @@ function TitleDetails({ selection, onBack, onRecommend, onAddToGroup }: { select
 }
 
 function MobileTrailerModal({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
-  return <div className="backdrop mobile-trailer-backdrop" onClick={onClose}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={onClose} aria-label="Close trailer">×</button><iframe src={src} title={`${title} official trailer`} allowFullScreen autoFocus /></div></div>;
+  const autoplaySrc = `${src}${src.includes("?") ? "&" : "?"}autoplay=1&playsinline=1&rel=0`;
+  return <div className="backdrop mobile-trailer-backdrop" onClick={onClose}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={onClose} aria-label="Close trailer">×</button><iframe src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen autoFocus /></div></div>;
 }
 
 function CastFilmographyModal({ name, onClose }: { name: string; onClose: () => void }) {
