@@ -251,3 +251,9 @@
 
 /* Real TMDb artwork appears over the existing color system once a token is set. */
 .cover img{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover;animation:posterIn .35s ease both}.cover-title{text-shadow:0 2px 7px #000a}@keyframes posterIn{from{opacity:0;transform:scale(1.03)}to{opacity:1;transform:scale(1)}}
+
+/* Recommendation rows use the same real title artwork as the rest of CineApe. */
+.live-inbox-list .inbox-cover{overflow:hidden}.live-inbox-list .inbox-cover img{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover}.live-inbox-list .inbox-cover:after{z-index:1}
+
+/* Published editor reviews stay inside the community feed, with a clear route to the full article. */
+.circle-editor-link{display:inline-block;margin-top:10px;color:var(--purple);font-size:11px;font-weight:850;text-decoration:none}.circle-editor-link:hover{text-decoration:underline}

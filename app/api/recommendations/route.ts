@@ -24,7 +24,7 @@ export async function GET(request: Request) {
   if (status) conditions.push(eq(recommendations.status, status));
   const rows = await db.select({
     id: recommendations.id, status: recommendations.status, note: recommendations.note, createdAt: recommendations.createdAt,
-    senderId: recommendations.senderId, recipientId: recommendations.recipientId,
+    senderId: recommendations.senderId, recipientId: recommendations.recipientId, titleId: titles.id,
     title: titles.name, type: titles.type, year: titles.releaseYear, posterPath: titles.posterPath,
   }).from(recommendations).innerJoin(titles, eq(recommendations.titleId, titles.id)).where(and(...conditions)).orderBy(desc(recommendations.createdAt));
   const peopleIds = rows.map(row => isSent ? row.recipientId : row.senderId);
