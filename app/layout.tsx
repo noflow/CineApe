@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: "/cineape-browser-tab.png",
-    apple: "/cineape-mark.png",
+    apple: "/cineape-apple-touch-icon.png?v=2",
   },
 };
 
