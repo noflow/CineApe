@@ -46,8 +46,8 @@
 /* Trailer view is CineApe full-screen, edge-to-edge, with no page chrome. */
 @media(max-width:620px){
   .mobile-trailer-backdrop{display:block!important;width:100vw;height:100svh;min-height:100dvh;overflow:hidden;padding:0!important;background:#000!important}
-  .mobile-trailer-modal{width:100vw!important;height:100svh!important;min-height:100dvh;border-radius:0!important}
-  .mobile-trailer-modal iframe{background:#000}
+  .mobile-trailer-modal{position:relative;width:100vw!important;height:100svh!important;min-height:100dvh;overflow:hidden;border-radius:0!important}
+  .mobile-trailer-modal iframe{top:50%!important;left:50%!important;width:max(100vw,177.78dvh)!important;height:max(100dvh,56.25vw)!important;min-width:100vw;min-height:100dvh;background:#000;transform:translate(-50%,-50%)}
 }
 
 /* Keep the recommendation composer usable above the phone navigation. */

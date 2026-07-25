@@ -1050,13 +1050,12 @@ function TitleDetails({ selection, onBack, onOpenTitle, onRecommend, onAddToGrou
 }
 
 function MobileTrailerModal({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
-  // iOS blocks automatic playback with sound. Starting muted lets the trailer
-  // begin from the poster tap. CineApe's edge-to-edge player stays inline so
-  // the browser does not pause playback while handing off to YouTube's UI.
+  // The poster tap starts the embedded player. CineApe keeps it inline and
+  // full-screen so YouTube does not hand off to its own smaller player UI.
   const trailerUrl = new URL(src);
   trailerUrl.hostname = "www.youtube-nocookie.com";
   trailerUrl.searchParams.set("autoplay", "1");
-  trailerUrl.searchParams.set("mute", "1");
+  trailerUrl.searchParams.set("mute", "0");
   trailerUrl.searchParams.set("playsinline", "1");
   trailerUrl.searchParams.set("enablejsapi", "1");
   trailerUrl.searchParams.set("fs", "0");
@@ -1066,12 +1065,10 @@ function MobileTrailerModal({ src, title, onClose }: { src: string; title: strin
   const autoplaySrc = trailerUrl.toString();
   const close = onClose;
   const startPlayback = (frame: HTMLIFrameElement) => {
-    // The URL starts muted autoplay. These API commands repeat the request once
-    // YouTube has finished initializing its embedded player on mobile.
-    const muteCommand = JSON.stringify({ event: "command", func: "mute", args: [] });
+    // Repeat the requested start after YouTube initializes. The original poster
+    // tap is the user gesture that permits playback with sound where supported.
     const playCommand = JSON.stringify({ event: "command", func: "playVideo", args: [] });
     [80, 350, 900, 1500].forEach(delay => window.setTimeout(() => {
-      frame.contentWindow?.postMessage(muteCommand, trailerUrl.origin);
       frame.contentWindow?.postMessage(playCommand, trailerUrl.origin);
     }, delay));
   };
