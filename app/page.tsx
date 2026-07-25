@@ -1044,32 +1044,38 @@ function TitleDetails({ selection, onBack, onOpenTitle, onRecommend, onAddToGrou
     const poster = target?.closest(".live-poster");
     if (!poster || !window.matchMedia("(max-width: 620px)").matches) return;
     const trailer = poster.closest(".live-title-page")?.querySelector<HTMLIFrameElement>(".trailer-frame iframe")?.src;
-    if (trailer) {
-      // Request full-screen during the poster tap itself. iPhone treats this
-      // as a user gesture, while the inline YouTube player can still autoplay.
-      const requestFullscreen = document.documentElement.requestFullscreen;
-      if (requestFullscreen) void requestFullscreen.call(document.documentElement).catch(() => undefined);
-      setMobileTrailer(trailer);
-    }
+    if (trailer) setMobileTrailer(trailer);
   };
   return <div className="cast-click-zone" onClick={onTitleClick}><TitleDetailsLegacy selection={selection} onBack={onBack} onRecommend={onRecommend} onAddToGroup={onAddToGroup}/>{castName && <CastFilmographyModal name={castName} onClose={() => setCastName(null)} onOpenTitle={onOpenTitle}/>} {mobileTrailer && <MobileTrailerModal src={mobileTrailer} title={selection.title} onClose={() => setMobileTrailer(null)}/>}</div>;
 }
 
 function MobileTrailerModal({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
   // iOS blocks automatic playback with sound. Starting muted lets the trailer
-  // begin from the poster tap. CineApe owns the full-screen view, which avoids
-  // YouTube's native iPhone player pausing before its first frame.
-  const embeddedSrc = src.replace("www.youtube.com", "www.youtube-nocookie.com");
-  const pageOrigin = typeof window === "undefined" ? "" : `&origin=${encodeURIComponent(window.location.origin)}`;
-  const autoplaySrc = `${embeddedSrc}${embeddedSrc.includes("?") ? "&" : "?"}autoplay=1&mute=1&playsinline=1&enablejsapi=1&fs=1&rel=0${pageOrigin}`;
-  const close = () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); onClose(); };
+  // begin from the poster tap. CineApe's edge-to-edge player stays inline so
+  // the browser does not pause playback while handing off to YouTube's UI.
+  const trailerUrl = new URL(src);
+  trailerUrl.hostname = "www.youtube-nocookie.com";
+  trailerUrl.searchParams.set("autoplay", "1");
+  trailerUrl.searchParams.set("mute", "1");
+  trailerUrl.searchParams.set("playsinline", "1");
+  trailerUrl.searchParams.set("enablejsapi", "1");
+  trailerUrl.searchParams.set("fs", "0");
+  trailerUrl.searchParams.set("rel", "0");
+  trailerUrl.searchParams.set("modestbranding", "1");
+  if (typeof window !== "undefined") trailerUrl.searchParams.set("origin", window.location.origin);
+  const autoplaySrc = trailerUrl.toString();
+  const close = onClose;
   const startPlayback = (frame: HTMLIFrameElement) => {
-    // Keep an explicit supported play command as a fallback for mobile players
-    // that defer the autoplay request while the full-screen overlay opens.
-    const playCommand = JSON.stringify({ event: "command", func: "playVideo", args: "" });
-    [0, 250, 700].forEach(delay => window.setTimeout(() => frame.contentWindow?.postMessage(playCommand, "https://www.youtube-nocookie.com"), delay));
+    // The URL starts muted autoplay. These API commands repeat the request once
+    // YouTube has finished initializing its embedded player on mobile.
+    const muteCommand = JSON.stringify({ event: "command", func: "mute", args: [] });
+    const playCommand = JSON.stringify({ event: "command", func: "playVideo", args: [] });
+    [80, 350, 900, 1500].forEach(delay => window.setTimeout(() => {
+      frame.contentWindow?.postMessage(muteCommand, trailerUrl.origin);
+      frame.contentWindow?.postMessage(playCommand, trailerUrl.origin);
+    }, delay));
   };
-  return <div className="backdrop mobile-trailer-backdrop" onClick={close}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={close} aria-label="Close trailer">×</button><iframe key={autoplaySrc} src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen onLoad={event => startPlayback(event.currentTarget)} /></div></div>;
+  return <div className="backdrop mobile-trailer-backdrop" onClick={close}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={close} aria-label="Close trailer">×</button><iframe key={autoplaySrc} src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; fullscreen; picture-in-picture" allowFullScreen onLoad={event => startPlayback(event.currentTarget)} /></div></div>;
 }
 
 function CastFilmographyModal({ name, onClose, onOpenTitle }: { name: string; onClose: () => void; onOpenTitle: (title: string, meta: string, score: string) => void }) {

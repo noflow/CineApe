@@ -43,6 +43,13 @@
 
 .share-modal .share-shortcut{margin:-10px 0 15px;color:var(--muted);font-size:12px;line-height:1.45}
 
+/* Trailer view is CineApe full-screen, edge-to-edge, with no page chrome. */
+@media(max-width:620px){
+  .mobile-trailer-backdrop{display:block!important;width:100vw;height:100svh;min-height:100dvh;overflow:hidden;padding:0!important;background:#000!important}
+  .mobile-trailer-modal{width:100vw!important;height:100svh!important;min-height:100dvh;border-radius:0!important}
+  .mobile-trailer-modal iframe{background:#000}
+}
+
 /* Keep the recommendation composer usable above the phone navigation. */
 @media(max-width:760px){
   .backdrop:has(.share-modal){z-index:30;align-items:start;overflow-y:auto;padding:12px}
