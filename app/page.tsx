@@ -250,13 +250,13 @@ function InviteModal({ onClose }: { onClose: () => void }) {
   return <div className="backdrop" onClick={onClose}><div className="modal invite-modal" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button><p className="eyebrow">YOUR PRIVATE CIRCLE</p><h2>Invite your people</h2><p>Share one private link with family or friends. New people can create a CineApe account; members who already have one simply sign in and are connected right away.</p><div className="invite-explainer"><b>Already on CineApe?</b><span>Open this link, sign in, and you’re added to the Circle—no second account or separate request needed.</span></div><div className="invite-link">{link || "Preparing your link…"}</div><div className="invite-actions"><button className="messenger-share" disabled={!link} onClick={shareInMessenger}>Send in Messenger</button><button className="secondary" disabled={!link} onClick={() => void copyLink()}>Copy link</button></div><small>{message}</small></div></div>;
 }
 
-type AppNotification = { id: string; kind: "recommendation" | "group_join" | "streaming" | "chat" | "friend_request"; message: string; createdAt: string; readAt: string | null };
+type AppNotification = { id: string; kind: "recommendation" | "group_join" | "streaming" | "episode" | "chat" | "friend_request"; message: string; createdAt: string; readAt: string | null };
 
 function NotificationPanel({ onClose }: { onClose: () => void }) {
   const [items, setItems] = useState<AppNotification[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => { let active = true; const country = navigator.language.split("-")[1]?.toUpperCase() === "CA" ? "CA" : "US"; void fetch(`/api/notifications?country=${country}`).then(response => response.ok ? response.json() as Promise<{ notifications?: AppNotification[] }> : null).then(data => { if (active) setItems(data?.notifications ?? []); }).catch(() => { if (active) setItems([]); }).finally(() => { if (active) setLoading(false); }); void fetch("/api/notifications", { method: "PATCH" }); return () => { active = false; }; }, []);
-  const icon = (kind: AppNotification["kind"]) => kind === "recommendation" ? "✦" : kind === "group_join" ? "♧" : kind === "chat" ? "✉" : kind === "friend_request" ? "+" : "▶";
+  const icon = (kind: AppNotification["kind"]) => kind === "recommendation" ? "✦" : kind === "group_join" ? "♧" : kind === "chat" ? "✉" : kind === "friend_request" ? "+" : kind === "episode" ? "◉" : "▶";
   return <div className="backdrop" onClick={onClose}><div className="modal notifications-modal" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button><p className="eyebrow">YOUR UPDATES</p><h2>Notifications</h2>{loading ? <p className="share-empty">Loading updates…</p> : items.length ? <div className="notification-list">{items.map(item => <article key={item.id}><i className={item.kind}>{icon(item.kind)}</i><div><b>{item.message}</b><small>{new Date(item.createdAt).toLocaleDateString()}</small></div></article>)}</div> : <p className="share-empty">You’re all caught up. New recommendations, group invites, and streaming alerts will appear here.</p>}</div></div>;
 }
 
@@ -377,7 +377,7 @@ function StudioPageOverview() {
   return <section className="page studio-page"><Intro label="PRIVATE CINEAPE STUDIO" title="Your publishing and growth center." text="Track your Circle, then create the editor reviews and must-watch lists that bring new people in." action={null}/>{stats ? <><div className="studio-stats">{cards.map(([label, value]) => <article className="panel" key={String(label)}><b>{value}</b><span>{label}</span></article>)}</div><div className="studio-grid"><article className="panel studio-next"><p className="eyebrow">EDITORIAL</p><h2>Official reviews</h2><p>Draft and publish CineApe editor reviews with a score, spoiler-safe copy, and SEO fields.</p><small>Editorial tools are ready for the next Studio screen.</small></article><article className="panel studio-next"><p className="eyebrow">SEO</p><h2>Must-watch lists</h2><p>Build indexable collections such as “Best TV shows to watch tonight” and “CineApe’s must-watch horror.”</p><small>Public review and list URLs are the next publishing step.</small></article></div></> : <div className="panel studio-access"><b>Studio access is not configured yet.</b><p>Add your email to the Render environment setting <code>ADMIN_EMAILS</code>, then reload CineApe.</p></div>}</section>;
 }
 type StudioMember = { id: string; email: string; displayName: string; avatarUrl: string | null; bio: string | null; createdAt: string };
-type EditorReview = { id: string; headline: string; score: number; status: "draft" | "published"; title: string; posterPath: string | null };
+type EditorReview = { id: string; slug: string; headline: string; score: number; status: "draft" | "published"; title: string; posterPath: string | null; createdAt: string; publishedAt: string | null };
 type EditorialTitle = { id: number; type: "movie" | "tv"; title: string; year: string | null; image: string | null; subtitle: string };
 
 function StudioPage() {
@@ -401,7 +401,7 @@ function StudioEditorial() {
   useEffect(() => { loadReviews(); }, []);
   const findTitle = async () => { if (titleQuery.trim().length < 2) { setMessage("Type at least two letters to find a movie or show."); return; } setMessage("Finding titles…"); const response = await fetch(`/api/tmdb?mode=search&query=${encodeURIComponent(titleQuery.trim())}`); const data = response.ok ? await response.json() as { results?: EditorialTitle[] } : null; const found = (data?.results ?? []).filter(item => item.type === "movie" || item.type === "tv"); setMatches(found); setMessage(found.length ? "Choose the title you are reviewing." : "No titles found."); };
   const submit = async (event: React.FormEvent) => { event.preventDefault(); if (!selected || saving) { setMessage("Choose a movie or show first."); return; } setSaving(true); setMessage(""); const response = await fetch("/api/admin/editor-reviews", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tmdbId: selected.id, type: selected.type, name: selected.title, year: selected.year ? Number(selected.year) : null, posterPath: selected.image, headline, body, score, seoTitle, seoDescription, status }) }); const data = await response.json() as { error?: string }; if (!response.ok) { setMessage(data.error ?? "Review could not be saved."); setSaving(false); return; } setMessage(status === "published" ? "Official review published." : "Draft saved in Studio."); setHeadline(""); setBody(""); setSeoTitle(""); setSeoDescription(""); setSelected(null); setMatches([]); setTitleQuery(""); setSaving(false); loadReviews(); };
-  return <section className="studio-editorial"><div className="studio-section-head"><div><p className="eyebrow">EDITORIAL DESK</p><h2>Official CineApe reviews</h2><p>Create a site review, choose whether it stays a draft or goes live, and supply its search preview.</p></div></div><div className="studio-editor-grid"><form className="panel editorial-form" onSubmit={submit}><label>FIND A TITLE<div className="editor-title-search"><input value={titleQuery} onChange={event => setTitleQuery(event.target.value)} placeholder="Search movie or TV show" /><button type="button" className="secondary" onClick={() => void findTitle()}>Find</button></div></label>{matches.length > 0 && <div className="editor-matches">{matches.map(match => <button type="button" className={selected?.id === match.id && selected.type === match.type ? "chosen" : ""} key={`${match.type}-${match.id}`} onClick={() => { setSelected(match); setMatches([]); setMessage(""); }}>{match.image ? <img src={match.image} alt="" /> : <span>◉</span>}<div><b>{match.title}</b><small>{match.subtitle}</small></div></button>)}</div>}{selected && <div className="editor-selected">{selected.image && <img src={selected.image} alt="" />}<b>{selected.title}<small>{selected.subtitle}</small></b><button type="button" onClick={() => setSelected(null)}>×</button></div>}<label>REVIEW HEADLINE<input value={headline} onChange={event => setHeadline(event.target.value)} maxLength={180} placeholder="The short, memorable verdict" /></label><label>CINEAPE SCORE <span>{score}/10</span><input type="range" min="1" max="10" value={score} onChange={event => setScore(Number(event.target.value))} /></label><label>REVIEW<textarea value={body} onChange={event => setBody(event.target.value)} maxLength={12000} placeholder="Write the official CineApe take. Keep it useful and spoiler-safe." /></label><fieldset><legend>SEARCH PREVIEW <small>Optional, but recommended</small></legend><label>SEO TITLE<input value={seoTitle} onChange={event => setSeoTitle(event.target.value)} maxLength={70} placeholder="e.g. The Bear review: worth watching?" /></label><label>META DESCRIPTION<textarea value={seoDescription} onChange={event => setSeoDescription(event.target.value)} maxLength={170} placeholder="A clear 1–2 sentence search description." /></label></fieldset><label>PUBLISHING STATUS<select value={status} onChange={event => setStatus(event.target.value as "draft" | "published")}><option value="draft">Save as draft</option><option value="published">Publish now</option></select></label><button className="primary wide" disabled={saving}>{saving ? "Saving…" : status === "published" ? "Publish official review" : "Save draft"}</button>{message && <p className="editor-message">{message}</p>}</form><div className="studio-review-list"><h3>Recent reviews</h3>{reviews.length ? reviews.map(review => <article className="panel" key={review.id}>{review.posterPath ? <img src={review.posterPath} alt="" /> : <span>★</span>}<div><b>{review.title}</b><small>{review.headline}</small><em>{review.status === "published" ? "Published" : "Draft"} · {review.score}/10</em></div></article>) : <div className="panel studio-empty">Your official CineApe reviews will appear here.</div>}</div></div></section>;
+  return <section className="studio-editorial"><div className="studio-section-head"><div><p className="eyebrow">EDITORIAL DESK</p><h2>Official CineApe reviews</h2><p>Create a site review, choose whether it stays a draft or goes live, and supply its search preview.</p></div></div><div className="studio-editor-grid"><form className="panel editorial-form" onSubmit={submit}><label>FIND A TITLE<div className="editor-title-search"><input value={titleQuery} onChange={event => setTitleQuery(event.target.value)} placeholder="Search movie or TV show" /><button type="button" className="secondary" onClick={() => void findTitle()}>Find</button></div></label>{matches.length > 0 && <div className="editor-matches">{matches.map(match => <button type="button" className={selected?.id === match.id && selected.type === match.type ? "chosen" : ""} key={`${match.type}-${match.id}`} onClick={() => { setSelected(match); setMatches([]); setMessage(""); }}>{match.image ? <img src={match.image} alt="" /> : <span>◉</span>}<div><b>{match.title}</b><small>{match.subtitle}</small></div></button>)}</div>}{selected && <div className="editor-selected">{selected.image && <img src={selected.image} alt="" />}<b>{selected.title}<small>{selected.subtitle}</small></b><button type="button" onClick={() => setSelected(null)}>×</button></div>}<label>REVIEW HEADLINE<input value={headline} onChange={event => setHeadline(event.target.value)} maxLength={180} placeholder="The short, memorable verdict" /></label><label>CINEAPE SCORE <span>{score}/10</span><input type="range" min="1" max="10" value={score} onChange={event => setScore(Number(event.target.value))} /></label><label>REVIEW<textarea value={body} onChange={event => setBody(event.target.value)} maxLength={12000} placeholder="Write the official CineApe take. Keep it useful and spoiler-safe." /></label><fieldset><legend>SEARCH PREVIEW <small>Optional, but recommended</small></legend><label>SEO TITLE<input value={seoTitle} onChange={event => setSeoTitle(event.target.value)} maxLength={70} placeholder="e.g. The Bear review: worth watching?" /></label><label>META DESCRIPTION<textarea value={seoDescription} onChange={event => setSeoDescription(event.target.value)} maxLength={170} placeholder="A clear 1–2 sentence search description." /></label></fieldset><label>PUBLISHING STATUS<select value={status} onChange={event => setStatus(event.target.value as "draft" | "published")}><option value="draft">Save as draft</option><option value="published">Publish now</option></select></label><button className="primary wide" disabled={saving}>{saving ? "Saving…" : status === "published" ? "Publish official review" : "Save draft"}</button>{message && <p className="editor-message">{message}</p>}</form><div className="studio-review-list"><div className="studio-review-list-head"><h3>Your reviews</h3><a href="/reviews" target="_blank" rel="noreferrer">Open public hub ↗</a></div>{reviews.length ? reviews.map(review => <article className="panel" key={review.id}>{review.posterPath ? <img src={review.posterPath} alt="" /> : <span>★</span>}<div><b>{review.title}</b><small>{review.headline}</small><em>{review.status === "published" ? "Published" : "Draft"} · {review.score}/10</em>{review.status === "published" && <a className="studio-live-link" href={`/reviews/${review.slug}`} target="_blank" rel="noreferrer">View live review ↗</a>}</div></article>) : <div className="panel studio-empty">Your official CineApe reviews will appear here.</div>}</div></div></section>;
 }
 
 type EditorialList = { id: string; name: string; slug: string; status: "draft" | "published"; createdAt: string; publishedAt: string | null };
@@ -875,6 +875,7 @@ function HomeCategories({ onOpen, onInvite }: { onOpen: (title?: string, meta?: 
 }
 type LiveRecommendation = { id: string; status: "pending" | "watching" | "watched" | "not_interested"; note: string | null; title: string; type: "movie" | "tv"; year: number | null; person: { displayName: string; avatarUrl: string | null } | null };
 type LibraryEntry = { id: string; status: "watchlist" | "watching" | "completed"; tmdbId: number; title: string; type: "movie" | "tv"; year: number | null; posterPath: string | null; currentSeason: number | null; currentEpisode: number | null };
+type EpisodeGuide = { season: number; episodes: number; name: string };
 
 function ForYouPage({ onInvite, onOpen }: { onInvite: () => void; onOpen: (title?: string, meta?: string, score?: string) => void }) {
   const [view, setView] = useState<"received" | "sent" | "watchlist" | "watching" | "completed">("received");
@@ -909,6 +910,8 @@ function ForYouTrackingPage({ onInvite, onOpen }: { onInvite: () => void; onOpen
   const [editing, setEditing] = useState<string | null>(null);
   const [season, setSeason] = useState(1);
   const [episode, setEpisode] = useState(1);
+  const [episodeGuides, setEpisodeGuides] = useState<Record<string, EpisodeGuide[]>>({});
+  const [progressLoading, setProgressLoading] = useState(false);
   const personalList = view === "watchlist" || view === "watching" || view === "completed";
 
   const load = () => {
@@ -942,10 +945,29 @@ function ForYouTrackingPage({ onInvite, onOpen }: { onInvite: () => void; onOpen
     if (response.ok) { setEditing(null); load(); }
   };
 
-  const openProgress = (item: LibraryEntry) => {
+  const openProgress = async (item: LibraryEntry) => {
     setEditing(item.id);
     setSeason(item.currentSeason ?? 1);
     setEpisode(item.currentEpisode ?? 1);
+    const savedGuide = episodeGuides[item.id];
+    if (savedGuide?.length) {
+      const savedSeason = savedGuide.find(entry => entry.season === item.currentSeason) ?? savedGuide[0];
+      setSeason(savedSeason.season);
+      setEpisode(Math.min(Math.max(item.currentEpisode ?? 1, 1), savedSeason.episodes));
+      return;
+    }
+    setProgressLoading(true);
+    try {
+      const response = await fetch(`/api/tmdb?id=${item.tmdbId}&type=tv`);
+      const data = response.ok ? await response.json() as { seasons?: EpisodeGuide[] } : null;
+      const guide = data?.seasons ?? [];
+      setEpisodeGuides(current => ({ ...current, [item.id]: guide }));
+      const selectedSeason = guide.find(entry => entry.season === item.currentSeason) ?? guide[0];
+      if (selectedSeason) {
+        setSeason(selectedSeason.season);
+        setEpisode(Math.min(Math.max(item.currentEpisode ?? 1, 1), selectedSeason.episodes));
+      }
+    } finally { setProgressLoading(false); }
   };
 
   const labels = [{ key: "received", label: "For you" }, { key: "sent", label: "Sent" }, { key: "watchlist", label: "Watchlist" }, { key: "watching", label: "Watching" }, { key: "completed", label: "Completed" }] as const;
@@ -959,7 +981,7 @@ function ForYouTrackingPage({ onInvite, onOpen }: { onInvite: () => void; onOpen
     <div className="tracking-actions">
       {item.status === "watching" && item.type === "tv" && <button className="small-ghost" onClick={() => openProgress(item)}>Update progress</button>}
       {item.status === "watching" && <button className="small-primary" onClick={() => void saveProgress(item, "completed")}>Mark completed</button>}
-      {editing === item.id && <div className="progress-editor"><label>Season<input type="number" min="1" value={season} onChange={event => setSeason(Math.max(1, Number(event.target.value) || 1))}/></label><label>Episode<input type="number" min="1" value={episode} onChange={event => setEpisode(Math.max(1, Number(event.target.value) || 1))}/></label><button className="small-primary" onClick={() => void saveProgress(item)}>Save</button></div>}
+      {editing === item.id && <div className="progress-editor">{progressLoading ? <small>Loading episode guide…</small> : episodeGuides[item.id]?.length ? <><label>Season<select value={season} onChange={event => { const nextSeason = Number(event.target.value); const nextGuide = episodeGuides[item.id].find(entry => entry.season === nextSeason); setSeason(nextSeason); setEpisode(current => Math.min(current, nextGuide?.episodes ?? 1)); }}>{episodeGuides[item.id].map(entry => <option key={entry.season} value={entry.season}>{entry.name}</option>)}</select></label><label>Episode<select value={episode} onChange={event => setEpisode(Number(event.target.value))}>{Array.from({ length: episodeGuides[item.id].find(entry => entry.season === season)?.episodes ?? 0 }, (_, index) => index + 1).map(number => <option key={number} value={number}>Episode {number}</option>)}</select></label><button className="small-primary" onClick={() => void saveProgress(item)}>Save</button></> : <small>Episode information is not available for this show yet.</small>}</div>}
     </div>
   </article>;
 
@@ -972,6 +994,7 @@ function ForYouTrackingPage({ onInvite, onOpen }: { onInvite: () => void; onOpen
 }
 type LiveTitle = { id: number; type: "movie" | "tv"; title: string; overview: string; year: string | null; poster: string | null; tmdbScore: number | null; tmdbVotes: number; runtime: number | null; genres: string[]; trailer: string | null; cast: Array<{ name: string; character: string; image: string | null }>; country: "CA" | "US"; providers: Array<{ name: string; image: string | null }>; providerLink?: string | null };
 type CommunityReview = { score: number; review: string | null; createdAt: string; displayName: string; avatarUrl: string | null };
+type OfficialReview = CommunityReview & { slug: string };
 type PersonalStatus = "watchlist" | "watching" | "completed" | null;
 
 function TitleDetailsLegacy({ selection, onBack, onRecommend, onAddToGroup }: { selection: { title: string; meta: string; score: string }; onBack: () => void; onRecommend: (title: ShareTitle) => void; onAddToGroup: (title: ShareTitle) => void }) {
@@ -1004,8 +1027,8 @@ function TitleDetailsLegacy({ selection, onBack, onRecommend, onAddToGroup }: { 
         }
         const reviewResponse = await fetch(`/api/reviews?tmdbId=${next.id}&type=${next.type}`);
         if (!reviewResponse.ok || !active) return;
-        const communityData = await reviewResponse.json() as { reviews: CommunityReview[]; average: number | null; count: number };
-        if (active) { setReviews(communityData.reviews); setCommunity({ average: communityData.average, count: communityData.count }); }
+        const communityData = await reviewResponse.json() as { reviews: CommunityReview[]; officialReviews?: OfficialReview[]; average: number | null; count: number };
+        if (active) { setReviews([...(communityData.officialReviews ?? []), ...communityData.reviews]); setCommunity({ average: communityData.average, count: communityData.count }); }
       }).catch(() => undefined).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [selection.title]);
@@ -1017,7 +1040,7 @@ function TitleDetailsLegacy({ selection, onBack, onRecommend, onAddToGroup }: { 
     if (!response.ok) { const data = await response.json().catch(() => null) as { error?: string } | null; setMessage(data?.error ?? "Your review could not be saved."); setSaving(false); return; }
     setMessage("Your CineApe review is live."); setSaving(false);
     const refresh = await fetch(`/api/reviews?tmdbId=${details.id}&type=${details.type}`);
-    if (refresh.ok) { const data = await refresh.json() as { reviews: CommunityReview[]; average: number | null; count: number }; setReviews(data.reviews); setCommunity({ average: data.average, count: data.count }); }
+    if (refresh.ok) { const data = await refresh.json() as { reviews: CommunityReview[]; officialReviews?: OfficialReview[]; average: number | null; count: number }; setReviews([...(data.officialReviews ?? []), ...data.reviews]); setCommunity({ average: data.average, count: data.count }); }
   };
 
   const advancePersonalStatus = async () => {

@@ -41,6 +41,14 @@
 /* TMDb artwork fades into the existing cinematic palette when configured. */
 .cover img{position:absolute;inset:0;z-index:0;width:100%;height:100%;object-fit:cover;animation:posterIn .35s ease both}.cover-title{text-shadow:0 2px 7px #000a}@keyframes posterIn{from{opacity:0;transform:scale(1.03)}to{opacity:1;transform:scale(1)}}
 
+/* TV episode progress uses TMDB's real season and episode counts. */
+.progress-editor select{width:80px;border:1px solid var(--line);border-radius:6px;background:#fff;padding:6px;outline:0;font-size:11px}.progress-editor>small{color:var(--muted);font-size:10px;white-space:nowrap}
+
+.notification-list i.episode{background:#eeeaff;color:#6047d3}
+
+/* Studio publishing links and the public review library. */
+.studio-review-list-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px}.studio-review-list-head h3{margin:0}.studio-review-list-head>a,.studio-live-link{color:var(--purple);font-size:10px;font-weight:850;text-decoration:none}.studio-live-link{display:inline-block;margin-top:7px}.studio-live-link:hover,.studio-review-list-head>a:hover{text-decoration:underline}.review-index-grid a p{color:#dd4c9a}@media(max-width:760px){.studio-review-list-head{align-items:baseline}.studio-live-link{font-size:11px}}
+
 /* Final mobile navigation sizing and a single, readable Discover selection state. */
 @media (max-width:760px) {
   .app-shell > .sidebar {

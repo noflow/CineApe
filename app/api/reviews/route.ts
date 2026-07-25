@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "../../db";
-import { titleRatings, titles, users } from "../../db/schema";
+import { editorReviews, titleRatings, titles, users } from "../../db/schema";
 
 type TitleType = "movie" | "tv";
 
@@ -23,9 +23,26 @@ export async function GET(request: Request) {
     .where(and(eq(titles.tmdbId, tmdbId), eq(titles.type, type)))
     .orderBy(desc(titleRatings.updatedAt));
 
+  const officialRows = await db.select({
+    score: editorReviews.score, headline: editorReviews.headline, review: editorReviews.body, createdAt: editorReviews.publishedAt,
+    slug: editorReviews.slug,
+  }).from(editorReviews)
+    .innerJoin(titles, eq(editorReviews.titleId, titles.id))
+    .innerJoin(users, eq(editorReviews.authorId, users.id))
+    .where(and(eq(titles.tmdbId, tmdbId), eq(titles.type, type), eq(editorReviews.status, "published")))
+    .orderBy(desc(editorReviews.publishedAt));
+
+  const officialReviews = officialRows.map(review => ({
+    score: review.score,
+    review: `${review.headline} — ${review.review}`,
+    createdAt: review.createdAt,
+    displayName: "CineApe Editor",
+    avatarUrl: null,
+    slug: review.slug,
+  }));
   const count = rows.length;
   const average = count ? Number((rows.reduce((total, row) => total + row.score, 0) / count).toFixed(1)) : null;
-  return Response.json({ reviews: rows, average, count }, { headers: { "Cache-Control": "no-store" } });
+  return Response.json({ reviews: rows, officialReviews, average, count }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {

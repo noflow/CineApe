@@ -142,6 +142,7 @@ export async function GET(request: Request) {
         title?: string; name?: string; release_date?: string; first_air_date?: string; overview?: string;
         poster_path?: string | null; backdrop_path?: string | null; vote_average?: number; vote_count?: number;
         runtime?: number; episode_run_time?: number[]; genres?: Array<{ id: number; name: string }>;
+        seasons?: Array<{ season_number?: number; episode_count?: number; name?: string }>;
         networks?: Array<{ name: string; logo_path?: string | null }>;
         credits?: { cast?: Array<{ id: number; name: string; character?: string; profile_path?: string | null }> };
         videos?: { results?: Array<{ key: string; site: string; type: string; official?: boolean }> };
@@ -168,6 +169,7 @@ export async function GET(request: Request) {
         poster: poster(data.poster_path), backdrop: poster(data.backdrop_path, "w1280"),
         tmdbScore: data.vote_average ? Number(data.vote_average.toFixed(1)) : null, tmdbVotes: data.vote_count ?? 0,
         runtime: data.runtime ?? data.episode_run_time?.[0] ?? null, genres: data.genres?.map(genre => genre.name) ?? [],
+        seasons: type === "tv" ? (data.seasons ?? []).filter(season => (season.season_number ?? 0) > 0 && (season.episode_count ?? 0) > 0).map(season => ({ season: season.season_number!, episodes: season.episode_count!, name: season.name ?? `Season ${season.season_number}` })) : [],
         trailer: trailer ? `https://www.youtube.com/embed/${trailer.key}` : null,
         cast: data.credits?.cast?.slice(0, 10).map(person => ({ name: person.name, character: person.character ?? "", image: poster(person.profile_path, "w185") })) ?? [],
         country, providers: primaryProvider ? [{ name: primaryProvider.provider_name, image: poster(primaryProvider.logo_path, "w92") }] : [],
