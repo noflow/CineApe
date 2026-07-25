@@ -75,11 +75,20 @@ export async function GET(request: Request) {
         if (endpoint.type === "tv" && category !== "reality") url.searchParams.set("without_genres", "10764,10763,10767");
         if (category === "new" || category === "past6months" || category === "pastyear") {
           const date = new Date();
-          const daysBack = category === "past6months" ? 183 : category === "pastyear" ? 365 : 90;
+          // "New releases" should feel like the things people are actually
+          // hearing about, not every low-traffic title added this week.
+          const daysBack = category === "past6months" ? 183 : category === "pastyear" ? 365 : 75;
           date.setDate(date.getDate() - daysBack);
-          url.searchParams.set("sort_by", `${dateField}.desc`);
+          url.searchParams.set("sort_by", category === "new" ? "popularity.desc" : `${dateField}.desc`);
           url.searchParams.set(`${dateField}.gte`, date.toISOString().slice(0, 10));
           url.searchParams.set(`${dateField}.lte`, today);
+          if (category === "new") {
+            url.searchParams.set("vote_count.gte", endpoint.type === "movie" ? "50" : "20");
+            url.searchParams.set("vote_average.gte", "5.2");
+            // Movies under an hour are overwhelmingly shorts, specials, or
+            // catalog filler rather than the releases CineApe members seek out.
+            if (endpoint.type === "movie") url.searchParams.set("with_runtime.gte", "60");
+          }
         } else if (category === "upcoming") {
           url.searchParams.set("sort_by", `${dateField}.asc`);
           url.searchParams.set(`${dateField}.gte`, tomorrow);
