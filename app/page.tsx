@@ -56,7 +56,9 @@ export default function Home() {
   const [discoverResume, setDiscoverResume] = useState<DiscoverResume | null>(null);
   const flash = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2800); };
   const openTitle = (title = "Mickey 17", meta = "2025 · Science fiction", score = "8.2") => { setSelectedTitle({ title, meta, score }); setPage("Title"); };
-  const nav = ["Home", "Discover", "For You", "Friends & Groups", "My Profile", ...(isAdmin ? ["Studio" as Page] : [])] as Page[];
+  const desktopNav = ["Home", "Discover", "For You", "Friends & Groups", "My Profile", ...(isAdmin ? ["Studio" as Page] : [])] as Page[];
+  const mobileNav = ["Home", "Discover", "For You", "Friends & Groups", "My Profile"] as Page[];
+  const navIcon = (item: Page) => ({ "Home": "⌂", "Discover": "⌕", "For You": "✦", "Friends & Groups": "♧", "My Profile": "◉", "Studio": "✎", "Title": "" }[item]);
   const shown = page === "Title" ? "Title" : page;
 
   useEffect(() => {
@@ -144,7 +146,7 @@ export default function Home() {
   if (!navigationReady) return <div className="session-loading" aria-label="Restoring your CineApe screen"><span></span></div>;
 
   return <div className="app-shell">
-    <aside className="sidebar"><button className="brand" onClick={() => setPage("Home")} aria-label="CineApe home"><img src="/cineape-logo.png" alt="CineApe"/></button><p>MENU</p><nav>{nav.map((item, index) => <button key={item} className={shown === item ? "active" : ""} onClick={() => setPage(item)}><span>{["⌂", "⌕", "✦", "♧", "◉"][index]}</span>{item}</button>)}</nav></aside>
+    <aside className="sidebar"><button className="brand" onClick={() => setPage("Home")} aria-label="CineApe home"><img src="/cineape-logo.png" alt="CineApe"/></button><p>MENU</p><nav className="desktop-nav">{desktopNav.map(item => <button key={item} className={shown === item ? "active" : ""} onClick={() => setPage(item)}><span>{navIcon(item)}</span>{item}</button>)}</nav><nav className="mobile-nav">{mobileNav.map(item => <button key={item} className={shown === item ? "active" : ""} onClick={() => setPage(item)}><span>{navIcon(item)}</span>{item}</button>)}</nav></aside>
     <main><header><button className="mobile-brand" onClick={() => setPage("Home")}><i></i>CineApe</button><label className="search">⌕<input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search movies, shows, people..." aria-label="Search movies, shows, actors, and actresses"/>{searchQuery.trim().length >= 2 && <div className="search-results">{searching && <p>Searching CineApe…</p>}{!searching && searchResults.map(result => result.type === "person" ? <div className="search-result person-result" key={`${result.type}-${result.id}`}>{result.image ? <img src={result.image} alt="" /> : <span>{result.title.slice(0, 1)}</span>}<div><b>{result.title}</b><small>{result.subtitle}</small></div><em>Person</em></div> : <button className="search-result" key={`${result.type}-${result.id}`} onClick={() => { setSearchQuery(""); setSearchResults([]); openTitle(result.title, `${result.year ?? "—"} · ${result.type === "tv" ? "TV series" : "Movie"}`, "—"); }}>{result.image ? <img src={result.image} alt="" /> : <span>{result.title.slice(0, 1)}</span>}<div><b>{result.title}</b><small>{result.subtitle}</small></div><em>{result.type === "tv" ? "TV" : "Movie"}</em></button>)}{!searching && !searchResults.length && <p>No movies, shows, or people found.</p>}</div>}</label><div><button className="bell" aria-label="Notifications" onClick={() => setNotificationsOpen(true)}>♧</button>{recommend()}</div></header>
 
     {page === "Home" && <section className="page home"><div className="hero onboarding-hero"><div><p className="eyebrow">WELCOME TO CINEAPE, {firstName.toUpperCase()}</p><h1>Your circle starts with one great pick.</h1><p>Catch new releases, see what your Circle is watching, and never lose a good recommendation.</p><button className="light-button" onClick={() => setPage("Discover")}>Discover movies and shows →</button></div><div className="poster-stack"><span className="poster poster-1">YOUR<br/>NEXT</span><span className="poster poster-2">GREAT<br/>PICK</span><span className="poster poster-3">START<br/>HERE</span></div></div><HomeCategories onOpen={openTitle} onInvite={() => setInviteOpen(true)} /></section>}
@@ -157,7 +159,7 @@ export default function Home() {
 
     {page === "Friends & Groups" && <CirclePage onInvite={() => setInviteOpen(true)} onOpen={openTitle} />}
 
-    {page === "My Profile" && <ProfilePage />}
+    {page === "My Profile" && <><ProfilePage /><ProfileMobileTools isAdmin={isAdmin} onOpenStudio={() => setPage("Studio")} /></>}
     {page === "Studio" && isAdmin && <StudioPage />}
     </main>
     {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} />}
@@ -316,6 +318,11 @@ function AccountControls() {
     <Show when="signed-in"><UserButton appearance={{ elements: { avatarBox: "user-avatar" } }} /></Show>
   </div>;
 }
+
+function ProfileMobileTools({ isAdmin, onOpenStudio }: { isAdmin: boolean; onOpenStudio: () => void }) {
+  return <section className="profile-mobile-tools panel"><div><p className="eyebrow">ACCOUNT</p><b>Account settings</b><small>Manage your sign-in and account details.</small></div><UserButton appearance={{ elements: { avatarBox: "profile-account-avatar" } }} />{isAdmin && <button className="secondary profile-studio-link" onClick={onOpenStudio}>Open Studio</button>}</section>;
+}
+
 function LandingPage() {
   return <div className="landing">
     <header className="landing-nav">
