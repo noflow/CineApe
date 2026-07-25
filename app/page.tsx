@@ -151,7 +151,7 @@ export default function Home() {
 
     {page === "Discover" && <DiscoverPage onOpen={openTitle} resume={discoverResume} onSnapshot={setDiscoverResume} />}
 
-    {page === "Title" && <TitleDetails selection={selectedTitle} onBack={() => setPage("Discover")} onRecommend={(title) => chooseShareTitle(title, "recommend")} onAddToGroup={(title) => chooseShareTitle(title, "groupPick")}/>} 
+    {page === "Title" && <TitleDetails selection={selectedTitle} onBack={() => setPage("Discover")} onOpenTitle={openTitle} onRecommend={(title) => chooseShareTitle(title, "recommend")} onAddToGroup={(title) => chooseShareTitle(title, "groupPick")}/>} 
 
     {page === "For You" && <ForYouTrackingPage onInvite={() => setInviteOpen(true)} onOpen={openTitle} />}
 
@@ -1018,7 +1018,7 @@ function TitleDetailsLegacy({ selection, onBack, onRecommend, onAddToGroup }: { 
 type FilmCredit = { id: number; type: "movie" | "tv"; title: string; year: string | null; image: string | null; character: string };
 type Filmography = { id: number; name: string; image: string | null; department: string; biography: string; filmography: { movies: FilmCredit[]; tv: FilmCredit[] } };
 
-function TitleDetails({ selection, onBack, onRecommend, onAddToGroup }: { selection: { title: string; meta: string; score: string }; onBack: () => void; onRecommend: (title: ShareTitle) => void; onAddToGroup: (title: ShareTitle) => void }) {
+function TitleDetails({ selection, onBack, onOpenTitle, onRecommend, onAddToGroup }: { selection: { title: string; meta: string; score: string }; onBack: () => void; onOpenTitle: (title: string, meta: string, score: string) => void; onRecommend: (title: ShareTitle) => void; onAddToGroup: (title: ShareTitle) => void }) {
   const [castName, setCastName] = useState<string | null>(null);
   const [mobileTrailer, setMobileTrailer] = useState<string | null>(null);
   const onTitleClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -1031,7 +1031,7 @@ function TitleDetails({ selection, onBack, onRecommend, onAddToGroup }: { select
     const trailer = poster.closest(".live-title-page")?.querySelector<HTMLIFrameElement>(".trailer-frame iframe")?.src;
     if (trailer) setMobileTrailer(trailer);
   };
-  return <div className="cast-click-zone" onClick={onTitleClick}><TitleDetailsLegacy selection={selection} onBack={onBack} onRecommend={onRecommend} onAddToGroup={onAddToGroup}/>{castName && <CastFilmographyModal name={castName} onClose={() => setCastName(null)}/>} {mobileTrailer && <MobileTrailerModal src={mobileTrailer} title={selection.title} onClose={() => setMobileTrailer(null)}/>}</div>;
+  return <div className="cast-click-zone" onClick={onTitleClick}><TitleDetailsLegacy selection={selection} onBack={onBack} onRecommend={onRecommend} onAddToGroup={onAddToGroup}/>{castName && <CastFilmographyModal name={castName} onClose={() => setCastName(null)} onOpenTitle={onOpenTitle}/>} {mobileTrailer && <MobileTrailerModal src={mobileTrailer} title={selection.title} onClose={() => setMobileTrailer(null)}/>}</div>;
 }
 
 function MobileTrailerModal({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
@@ -1051,11 +1051,12 @@ function MobileTrailerModal({ src, title, onClose }: { src: string; title: strin
   return <div className="backdrop mobile-trailer-backdrop" onClick={close}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={close} aria-label="Close trailer">×</button><iframe key={autoplaySrc} src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen onLoad={event => startPlayback(event.currentTarget)} /></div></div>;
 }
 
-function CastFilmographyModal({ name, onClose }: { name: string; onClose: () => void }) {
+function CastFilmographyModal({ name, onClose, onOpenTitle }: { name: string; onClose: () => void; onOpenTitle: (title: string, meta: string, score: string) => void }) {
   const [person, setPerson] = useState<Filmography | null>(null); const [tab, setTab] = useState<"movies" | "tv">("movies"); const [error, setError] = useState("");
   useEffect(() => { let active = true; setPerson(null); setError(""); void fetch(`/api/tmdb?person=${encodeURIComponent(name)}`).then(response => response.ok ? response.json() as Promise<Filmography> : response.json().then((data: { error?: string }) => Promise.reject(new Error(data.error ?? "Filmography unavailable.")))).then(data => { if (active) setPerson(data); }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : "Filmography unavailable."); }); return () => { active = false; }; }, [name]);
   const credits = person?.filmography[tab] ?? [];
-  return <div className="backdrop" onClick={onClose}><div className="modal cast-filmography-modal" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button>{!person && !error && <p className="share-empty">Loading {name}'s filmography…</p>}{error && <p className="share-empty">{error}</p>}{person && <><div className="filmography-heading">{person.image ? <img src={person.image} alt="" /> : <span>{person.name.slice(0, 1)}</span>}<div><p className="eyebrow">{person.department}</p><h2>{person.name}</h2>{person.biography && <p>{person.biography}</p>}</div></div><div className="tabs filmography-tabs"><button className={tab === "movies" ? "chosen" : ""} onClick={() => setTab("movies")}>Movies <span>{person.filmography.movies.length}</span></button><button className={tab === "tv" ? "chosen" : ""} onClick={() => setTab("tv")}>TV series <span>{person.filmography.tv.length}</span></button></div>{credits.length ? <div className="filmography-grid">{credits.map(credit => <article key={`${credit.type}-${credit.id}`}><div>{credit.image ? <img src={credit.image} alt="" /> : <span>{credit.title.slice(0, 1)}</span>}</div><b>{credit.title}</b><small>{credit.year ?? "—"}{credit.character ? ` · ${credit.character}` : ""}</small></article>)}</div> : <p className="profile-empty">No {tab === "tv" ? "TV series" : "movies"} listed.</p>}</>}</div></div>;
+  const openCredit = (credit: FilmCredit) => { onClose(); onOpenTitle(credit.title, `${credit.year ?? "—"} · ${credit.type === "tv" ? "TV series" : "Movie"}`, "—"); };
+  return <div className="backdrop" onClick={onClose}><div className="modal cast-filmography-modal" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button>{!person && !error && <p className="share-empty">Loading {name}'s filmography…</p>}{error && <p className="share-empty">{error}</p>}{person && <><div className="filmography-heading">{person.image ? <img src={person.image} alt="" /> : <span>{person.name.slice(0, 1)}</span>}<div><p className="eyebrow">{person.department}</p><h2>{person.name}</h2>{person.biography && <p>{person.biography}</p>}</div></div><div className="tabs filmography-tabs"><button className={tab === "movies" ? "chosen" : ""} onClick={() => setTab("movies")}>Movies <span>{person.filmography.movies.length}</span></button><button className={tab === "tv" ? "chosen" : ""} onClick={() => setTab("tv")}>TV series <span>{person.filmography.tv.length}</span></button></div>{credits.length ? <div className="filmography-grid">{credits.map(credit => <article key={`${credit.type}-${credit.id}`} className="filmography-card" role="button" tabIndex={0} onClick={() => openCredit(credit)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openCredit(credit); } }} aria-label={`Open ${credit.title}`}><div>{credit.image ? <img src={credit.image} alt="" /> : <span>{credit.title.slice(0, 1)}</span>}</div><b>{credit.title}</b><small>{credit.year ?? "—"}{credit.character ? ` · ${credit.character}` : ""}</small></article>)}</div> : <p className="profile-empty">No {tab === "tv" ? "TV series" : "movies"} listed.</p>}</>}</div></div>;
 }
 
 function Intro({label,title,text,action}:{label:string,title:string,text:string,action:React.ReactNode}) { return <div className="intro"><div><p className="eyebrow">{label}</p><h1>{title}</h1><p>{text}</p></div>{action}</div>; }
