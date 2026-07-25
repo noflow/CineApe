@@ -200,16 +200,19 @@ function DisplayNameModal({ suggestedUsername, onSaved }: { suggestedUsername: s
     setSaving(true);
     setMessage("");
     try {
-      if (user) {
-        const clerkUpdates: { username: string; firstName?: string; lastName?: string } = { username: cleanUsername };
-        if (cleanFirstName) clerkUpdates.firstName = cleanFirstName;
-        if (cleanLastName) clerkUpdates.lastName = cleanLastName;
-        await user.update(clerkUpdates);
-      }
       const response = await fetch("/api/account", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayName, username: cleanUsername }) });
       const data = await response.json() as { error?: string; profile?: { displayName?: string } };
       if (!response.ok || !data.profile?.displayName) { setMessage(data.error ?? "Your display name could not be saved."); return; }
       onSaved(data.profile.displayName);
+      // CineApe's profile is the source of truth for the social experience.
+      // Sync to Clerk afterwards so a Clerk-side setting cannot trap someone
+      // in the welcome screen after their CineApe profile has saved.
+      if (user) {
+        const clerkUpdates: { username: string; firstName?: string; lastName?: string } = { username: cleanUsername };
+        if (cleanFirstName) clerkUpdates.firstName = cleanFirstName;
+        if (cleanLastName) clerkUpdates.lastName = cleanLastName;
+        void user.update(clerkUpdates).catch(() => undefined);
+      }
     } catch (error) { setMessage(clerkProfileError(error)); }
     finally { setSaving(false); }
   };
@@ -1026,7 +1029,14 @@ function TitleDetails({ selection, onBack, onRecommend, onAddToGroup }: { select
     const poster = target?.closest(".live-poster");
     if (!poster || !window.matchMedia("(max-width: 620px)").matches) return;
     const trailer = poster.closest(".live-title-page")?.querySelector<HTMLIFrameElement>(".trailer-frame iframe")?.src;
-    if (trailer) setMobileTrailer(trailer);
+    if (trailer) {
+      // This call happens directly inside the poster tap, which is required for
+      // browsers to allow fullscreen mode on mobile.
+      const root = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+      const requestFullscreen = root.requestFullscreen ?? root.webkitRequestFullscreen;
+      if (requestFullscreen) void Promise.resolve(requestFullscreen.call(root)).catch(() => undefined);
+      setMobileTrailer(trailer);
+    }
   };
   return <div className="cast-click-zone" onClick={onTitleClick}><TitleDetailsLegacy selection={selection} onBack={onBack} onRecommend={onRecommend} onAddToGroup={onAddToGroup}/>{castName && <CastFilmographyModal name={castName} onClose={() => setCastName(null)}/>} {mobileTrailer && <MobileTrailerModal src={mobileTrailer} title={selection.title} onClose={() => setMobileTrailer(null)}/>}</div>;
 }
@@ -1035,8 +1045,9 @@ function MobileTrailerModal({ src, title, onClose }: { src: string; title: strin
   // iOS blocks automatic playback with sound. Starting muted lets the trailer
   // begin from the poster tap; viewers can turn sound on in the player.
   const embeddedSrc = src.replace("www.youtube.com", "www.youtube-nocookie.com");
-  const autoplaySrc = `${embeddedSrc}${embeddedSrc.includes("?") ? "&" : "?"}autoplay=1&mute=1&playsinline=1&enablejsapi=1&rel=0`;
-  return <div className="backdrop mobile-trailer-backdrop" onClick={onClose}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={onClose} aria-label="Close trailer">×</button><iframe key={autoplaySrc} src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen /></div></div>;
+  const autoplaySrc = `${embeddedSrc}${embeddedSrc.includes("?") ? "&" : "?"}autoplay=1&mute=1&playsinline=1&enablejsapi=1&fs=1&rel=0`;
+  const close = () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); onClose(); };
+  return <div className="backdrop mobile-trailer-backdrop" onClick={close}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={close} aria-label="Close trailer">×</button><iframe key={autoplaySrc} src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen /></div></div>;
 }
 
 function CastFilmographyModal({ name, onClose }: { name: string; onClose: () => void }) {
