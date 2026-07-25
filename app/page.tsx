@@ -1033,6 +1033,16 @@ function TitleDetailsLegacy({ selection, onBack, onRecommend, onAddToGroup }: { 
 type FilmCredit = { id: number; type: "movie" | "tv"; title: string; year: string | null; image: string | null; character: string };
 type Filmography = { id: number; name: string; image: string | null; department: string; biography: string; filmography: { movies: FilmCredit[]; tv: FilmCredit[] } };
 
+function mobileTrailerSource(src: string) {
+  const trailerUrl = new URL(src);
+  trailerUrl.searchParams.set("autoplay", "0");
+  trailerUrl.searchParams.set("playsinline", "0");
+  trailerUrl.searchParams.set("enablejsapi", "1");
+  trailerUrl.searchParams.set("fs", "1");
+  if (typeof window !== "undefined") trailerUrl.searchParams.set("origin", window.location.origin);
+  return trailerUrl.toString();
+}
+
 function TitleDetails({ selection, onBack, onOpenTitle, onRecommend, onAddToGroup }: { selection: { title: string; meta: string; score: string }; onBack: () => void; onOpenTitle: (title: string, meta: string, score: string) => void; onRecommend: (title: ShareTitle) => void; onAddToGroup: (title: ShareTitle) => void }) {
   const [castName, setCastName] = useState<string | null>(null);
   const [mobileTrailer, setMobileTrailer] = useState<string | null>(null);
@@ -1043,20 +1053,30 @@ function TitleDetails({ selection, onBack, onOpenTitle, onRecommend, onAddToGrou
     if (name) { setCastName(name); return; }
     const poster = target?.closest(".live-poster");
     if (!poster || !window.matchMedia("(max-width: 620px)").matches) return;
-    const trailer = poster.closest(".live-title-page")?.querySelector<HTMLIFrameElement>(".trailer-frame iframe")?.src;
-    if (trailer) setMobileTrailer(trailer);
+    const player = poster.closest(".live-title-page")?.querySelector<HTMLIFrameElement>(".trailer-frame iframe");
+    if (!player) return;
+    player.src = mobileTrailerSource(player.src);
+    const playerOrigin = new URL(player.src).origin;
+    const playCommand = JSON.stringify({ event: "command", func: "playVideo", args: [] });
+    // Calling fullscreen on the actual YouTube iframe is the browser equivalent
+    // of tapping YouTube's expand control, rather than merely enlarging our page.
+    if (player.requestFullscreen) {
+      void player.requestFullscreen().catch(() => setMobileTrailer(player.src));
+    } else {
+      setMobileTrailer(player.src);
+    }
+    [0, 180, 500, 1000, 1800].forEach(delay => window.setTimeout(() => player.contentWindow?.postMessage(playCommand, playerOrigin), delay));
   };
   return <div className="cast-click-zone" onClick={onTitleClick}><TitleDetailsLegacy selection={selection} onBack={onBack} onRecommend={onRecommend} onAddToGroup={onAddToGroup}/>{castName && <CastFilmographyModal name={castName} onClose={() => setCastName(null)} onOpenTitle={onOpenTitle}/>} {mobileTrailer && <MobileTrailerModal src={mobileTrailer} title={selection.title} onClose={() => setMobileTrailer(null)}/>}</div>;
 }
 
 function MobileTrailerModal({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
-  // The poster tap starts the embedded player. CineApe keeps it inline and
-  // full-screen so YouTube does not hand off to its own smaller player UI.
+  // Fallback for browsers that do not allow an iframe to enter native fullscreen.
   const trailerUrl = new URL(src);
   trailerUrl.hostname = "www.youtube-nocookie.com";
   trailerUrl.searchParams.set("autoplay", "1");
   trailerUrl.searchParams.set("mute", "0");
-  trailerUrl.searchParams.set("playsinline", "1");
+  trailerUrl.searchParams.set("playsinline", "0");
   trailerUrl.searchParams.set("enablejsapi", "1");
   trailerUrl.searchParams.set("fs", "0");
   trailerUrl.searchParams.set("rel", "0");
