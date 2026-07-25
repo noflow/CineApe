@@ -1039,9 +1039,16 @@ function MobileTrailerModal({ src, title, onClose }: { src: string; title: strin
   // begin from the poster tap. playsinline=0 tells YouTube to use its native
   // fullscreen playback on iPhone instead of remaining embedded in the page.
   const embeddedSrc = src.replace("www.youtube.com", "www.youtube-nocookie.com");
-  const autoplaySrc = `${embeddedSrc}${embeddedSrc.includes("?") ? "&" : "?"}autoplay=1&mute=1&playsinline=0&enablejsapi=1&fs=1&rel=0`;
+  const pageOrigin = typeof window === "undefined" ? "" : `&origin=${encodeURIComponent(window.location.origin)}`;
+  const autoplaySrc = `${embeddedSrc}${embeddedSrc.includes("?") ? "&" : "?"}autoplay=1&mute=1&playsinline=0&enablejsapi=1&fs=1&rel=0${pageOrigin}`;
   const close = () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); onClose(); };
-  return <div className="backdrop mobile-trailer-backdrop" onClick={close}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={close} aria-label="Close trailer">×</button><iframe key={autoplaySrc} src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen /></div></div>;
+  const startPlayback = (frame: HTMLIFrameElement) => {
+    // Some mobile YouTube players ignore autoplay while switching into native
+    // fullscreen. Give the player an explicit supported play command as well.
+    const playCommand = JSON.stringify({ event: "command", func: "playVideo", args: "" });
+    [0, 250, 700].forEach(delay => window.setTimeout(() => frame.contentWindow?.postMessage(playCommand, "https://www.youtube-nocookie.com"), delay));
+  };
+  return <div className="backdrop mobile-trailer-backdrop" onClick={close}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={close} aria-label="Close trailer">×</button><iframe key={autoplaySrc} src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen onLoad={event => startPlayback(event.currentTarget)} /></div></div>;
 }
 
 function CastFilmographyModal({ name, onClose }: { name: string; onClose: () => void }) {
