@@ -1032,8 +1032,11 @@ function TitleDetails({ selection, onBack, onRecommend, onAddToGroup }: { select
 }
 
 function MobileTrailerModal({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
-  const autoplaySrc = `${src}${src.includes("?") ? "&" : "?"}autoplay=1&playsinline=1&rel=0`;
-  return <div className="backdrop mobile-trailer-backdrop" onClick={onClose}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={onClose} aria-label="Close trailer">×</button><iframe src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen autoFocus /></div></div>;
+  // iOS blocks automatic playback with sound. Starting muted lets the trailer
+  // begin from the poster tap; viewers can turn sound on in the player.
+  const embeddedSrc = src.replace("www.youtube.com", "www.youtube-nocookie.com");
+  const autoplaySrc = `${embeddedSrc}${embeddedSrc.includes("?") ? "&" : "?"}autoplay=1&mute=1&playsinline=1&enablejsapi=1&rel=0`;
+  return <div className="backdrop mobile-trailer-backdrop" onClick={onClose}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={onClose} aria-label="Close trailer">×</button><iframe key={autoplaySrc} src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen /></div></div>;
 }
 
 function CastFilmographyModal({ name, onClose }: { name: string; onClose: () => void }) {
