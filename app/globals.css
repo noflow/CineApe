@@ -56,12 +56,12 @@
 .mobile-nav,.profile-mobile-tools{display:none}
 @media(max-width:760px){
   .sidebar .desktop-nav{display:none}
-  .sidebar .mobile-nav{display:flex;align-items:stretch;justify-content:space-between;gap:3px;width:100%}
-  .sidebar{padding:9px 10px calc(11px + env(safe-area-inset-bottom))!important}
-  .sidebar .mobile-nav button{display:grid;min-width:0;min-height:56px;flex:1;place-items:center;gap:4px;padding:7px 2px!important;font-size:10px!important;line-height:1.05;text-align:center}
-  .sidebar .mobile-nav button span{font-size:17px;line-height:1}
+  .sidebar .mobile-nav{display:flex;align-items:stretch;justify-content:stretch;gap:0;width:100%}
+  .sidebar{padding:9px 4px calc(11px + env(safe-area-inset-bottom))!important}
+  .sidebar .mobile-nav button{display:grid;width:20%;min-width:0;min-height:62px;flex:0 0 20%;place-items:center;gap:5px;padding:8px 2px!important;font-size:10.5px!important;line-height:1.05;text-align:center}
+  .sidebar .mobile-nav button span{font-size:18px;line-height:1}
   .sidebar .mobile-nav button.active:before{top:-9px}
-  .app-shell main{padding-bottom:108px}
+  .app-shell main{padding-bottom:116px}
   .auth-float{display:none!important}
   .profile-mobile-tools{display:flex;align-items:center;gap:11px;margin-top:18px;padding:14px 16px}
   .profile-mobile-tools>div{min-width:0;flex:1}
