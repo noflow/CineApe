@@ -1029,23 +1029,17 @@ function TitleDetails({ selection, onBack, onRecommend, onAddToGroup }: { select
     const poster = target?.closest(".live-poster");
     if (!poster || !window.matchMedia("(max-width: 620px)").matches) return;
     const trailer = poster.closest(".live-title-page")?.querySelector<HTMLIFrameElement>(".trailer-frame iframe")?.src;
-    if (trailer) {
-      // This call happens directly inside the poster tap, which is required for
-      // browsers to allow fullscreen mode on mobile.
-      const root = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
-      const requestFullscreen = root.requestFullscreen ?? root.webkitRequestFullscreen;
-      if (requestFullscreen) void Promise.resolve(requestFullscreen.call(root)).catch(() => undefined);
-      setMobileTrailer(trailer);
-    }
+    if (trailer) setMobileTrailer(trailer);
   };
   return <div className="cast-click-zone" onClick={onTitleClick}><TitleDetailsLegacy selection={selection} onBack={onBack} onRecommend={onRecommend} onAddToGroup={onAddToGroup}/>{castName && <CastFilmographyModal name={castName} onClose={() => setCastName(null)}/>} {mobileTrailer && <MobileTrailerModal src={mobileTrailer} title={selection.title} onClose={() => setMobileTrailer(null)}/>}</div>;
 }
 
 function MobileTrailerModal({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
   // iOS blocks automatic playback with sound. Starting muted lets the trailer
-  // begin from the poster tap; viewers can turn sound on in the player.
+  // begin from the poster tap. playsinline=0 tells YouTube to use its native
+  // fullscreen playback on iPhone instead of remaining embedded in the page.
   const embeddedSrc = src.replace("www.youtube.com", "www.youtube-nocookie.com");
-  const autoplaySrc = `${embeddedSrc}${embeddedSrc.includes("?") ? "&" : "?"}autoplay=1&mute=1&playsinline=1&enablejsapi=1&fs=1&rel=0`;
+  const autoplaySrc = `${embeddedSrc}${embeddedSrc.includes("?") ? "&" : "?"}autoplay=1&mute=1&playsinline=0&enablejsapi=1&fs=1&rel=0`;
   const close = () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); onClose(); };
   return <div className="backdrop mobile-trailer-backdrop" onClick={close}><div className="mobile-trailer-modal" onClick={event => event.stopPropagation()}><button className="mobile-trailer-close" onClick={close} aria-label="Close trailer">×</button><iframe key={autoplaySrc} src={autoplaySrc} title={`${title} official trailer`} allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowFullScreen /></div></div>;
 }
