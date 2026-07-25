@@ -66,13 +66,17 @@ export async function GET(request: Request) {
         const tomorrow = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString().slice(0, 10);
         const dateField = endpoint.type === "movie" ? "primary_release_date" : "first_air_date";
         const genreByType = endpoint.type === "movie"
-          ? { drama: "18", thriller: "53", comedy: "35", animation: "16", horror: "27", scifi: "878", family: "10751" }
-          : { drama: "18", thriller: "9648", comedy: "35", animation: "16", horror: "10765", scifi: "10765", family: "10751", crime: "80", reality: "10764" };
+          ? { action: "28", adventure: "12", animation: "16", comedy: "35", crime: "80", documentary: "99", drama: "18", family: "10751", fantasy: "14", horror: "27", romance: "10749", scifi: "878", thriller: "53" }
+          : { action: "10759", animation: "16", comedy: "35", crime: "80", documentary: "99", drama: "18", fantasy: "10765", kids: "10762", mystery: "9648", reality: "10764", scifi: "10765", thriller: "9648" };
         const genre = genreByType[category as keyof typeof genreByType];
         if (genre) url.searchParams.set("with_genres", genre);
-        if (category === "new") {
+        // Keep reality, talk, and news programming out of the regular TV shelves.
+        // Reality remains available through its own deliberate filter.
+        if (endpoint.type === "tv" && category !== "reality") url.searchParams.set("without_genres", "10764,10763,10767");
+        if (category === "new" || category === "past6months" || category === "pastyear") {
           const date = new Date();
-          date.setDate(date.getDate() - 90);
+          const daysBack = category === "past6months" ? 183 : category === "pastyear" ? 365 : 90;
+          date.setDate(date.getDate() - daysBack);
           url.searchParams.set("sort_by", `${dateField}.desc`);
           url.searchParams.set(`${dateField}.gte`, date.toISOString().slice(0, 10));
           url.searchParams.set(`${dateField}.lte`, today);
@@ -93,7 +97,7 @@ export async function GET(request: Request) {
         releaseDate: item.release_date ?? item.first_air_date ?? "",
         image: poster(item.poster_path), score: item.vote_average ? item.vote_average.toFixed(1) : "—",
       })));
-      const byDate = category === "new" || category === "upcoming";
+      const byDate = category === "new" || category === "past6months" || category === "pastyear" || category === "upcoming";
       const sorted = titledResults.sort((a, b) => byDate ? (category === "upcoming" ? a.releaseDate.localeCompare(b.releaseDate) : b.releaseDate.localeCompare(a.releaseDate)) : Number(b.score) - Number(a.score));
       const titles = sorted.slice(0, 24).map(({ releaseDate: _releaseDate, ...title }) => title);
       return Response.json({ titles, page, hasMore: collections.some(collection => page < collection.totalPages) }, { headers: { "Cache-Control": "public, max-age=900, s-maxage=21600" } });

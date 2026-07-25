@@ -514,8 +514,16 @@ function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string,
   useEffect(() => { const node = sentinel.current; if (!node || !hasMore || loading) return; const observer = new IntersectionObserver(entries => { if (entries[0]?.isIntersecting) void loadMore(); }, { rootMargin: "420px" }); observer.observe(node); return () => observer.disconnect(); }, [hasMore, loading, loadingMore, nextPage, titles.length]);
   const rememberAndOpen = (title: DiscoverTitle) => { onSnapshot({ filter, category, titles, nextPage, hasMore, scrollY: window.scrollY }); onOpen(title.title, `${title.year ?? "—"} · ${title.type === "tv" ? "TV series" : "Movie"}`, title.score); };
   const filters = [{ key: "all", label: "Popular now" }, { key: "movie", label: "Movies" }, { key: "tv", label: "TV shows" }] as const;
-  const categories = filter === "movie" ? [{ key: "all", label: "All movies" }, { key: "new", label: "New releases" }, { key: "upcoming", label: "Coming soon" }, { key: "drama", label: "Drama" }, { key: "thriller", label: "Thriller" }, { key: "comedy", label: "Comedy" }, { key: "animation", label: "Animation" }, { key: "horror", label: "Horror" }, { key: "scifi", label: "Sci-fi" }, { key: "family", label: "Family" }] : [{ key: "all", label: "All shows" }, { key: "new", label: "New releases" }, { key: "upcoming", label: "Coming soon" }, { key: "drama", label: "Drama" }, { key: "thriller", label: "Mystery & thriller" }, { key: "comedy", label: "Comedy" }, { key: "animation", label: "Animation" }, { key: "horror", label: "Horror & fantasy" }, { key: "crime", label: "Crime" }, { key: "reality", label: "Reality" }];
-  const subtitle = category === "upcoming" ? `Upcoming ${filter === "tv" ? "series" : "movies"} ordered by their nearest release date.` : category === "new" ? `Recently released ${filter === "tv" ? "series" : "movies"} you can look for now.` : filter === "all" ? "Popular English-language movies and shows for your region." : filter === "movie" ? "Popular English-language movies to save for your next night in." : "Popular English-language series ready for your next binge.";
+  const categories = filter === "movie" ? [
+    { key: "all", label: "All movies" }, { key: "new", label: "New releases" }, { key: "past6months", label: "Past 6 months" }, { key: "pastyear", label: "Past year" }, { key: "upcoming", label: "Coming soon" },
+    { key: "action", label: "Action" }, { key: "adventure", label: "Adventure" }, { key: "comedy", label: "Comedy" }, { key: "drama", label: "Drama" }, { key: "thriller", label: "Thriller" }, { key: "crime", label: "Crime" },
+    { key: "horror", label: "Horror" }, { key: "scifi", label: "Sci-fi" }, { key: "fantasy", label: "Fantasy" }, { key: "romance", label: "Romance" }, { key: "animation", label: "Animation" }, { key: "family", label: "Family" }, { key: "documentary", label: "Documentary" },
+  ] : [
+    { key: "all", label: "All shows" }, { key: "new", label: "New releases" }, { key: "upcoming", label: "Coming soon" },
+    { key: "drama", label: "Drama" }, { key: "comedy", label: "Comedy" }, { key: "crime", label: "Crime" }, { key: "thriller", label: "Mystery & thriller" }, { key: "action", label: "Action & adventure" },
+    { key: "scifi", label: "Sci-fi & fantasy" }, { key: "animation", label: "Animation" }, { key: "documentary", label: "Documentary" }, { key: "kids", label: "Kids & family" }, { key: "reality", label: "Reality TV" },
+  ];
+  const subtitle = category === "upcoming" ? `Upcoming ${filter === "tv" ? "series" : "movies"} ordered by their nearest release date.` : category === "past6months" ? "Movies released in the past six months, newest first." : category === "pastyear" ? "Movies released in the past year, newest first." : category === "new" ? `Recently released ${filter === "tv" ? "series" : "movies"} you can look for now.` : category === "reality" ? "Reality TV only, kept separate from scripted series." : filter === "all" ? "Popular English-language movies and scripted series for your region." : filter === "movie" ? "Popular English-language movies to save for your next night in." : "Popular scripted series ready for your next binge.";
   return <section className="page live-discover"><Intro label="DISCOVER" title="Find your next obsession." text={subtitle} action={null}/><div className="tabs discover-tabs">{filters.map(item => <button key={item.key} className={filter === item.key ? "chosen" : ""} onClick={() => { setFilter(item.key); setCategory("all"); }}>{item.label}</button>)}</div>{filter !== "all" && <div className="genre-chips" aria-label={`${filter === "movie" ? "Movie" : "TV show"} categories`}>{categories.map(item => <button key={item.key} className={category === item.key ? "chosen" : ""} onClick={() => setCategory(item.key)}>{item.label}</button>)}</div>}{loading ? <div className="panel discover-loading">Finding great titles…</div> : titles.length ? <><div className="discover-grid live-discover-grid">{titles.map((title, index) => <article className="media-card" key={`${title.type}-${title.id}`}><button className={`cover ${["a", "b", "c", "d", "e"][index % 5]}`} onClick={() => rememberAndOpen(title)}>{title.image && <img src={title.image} alt={`${title.title} poster`} />}<span className="cover-type">{title.type === "tv" ? "TV" : "Movie"}</span><span className="cover-score">★ {title.score}</span><span className="cover-title"><small>{title.year ?? "New release"}</small>{title.title}</span></button><strong>{title.title}</strong><span>{title.type === "tv" ? "TV series" : "Movie"} · TMDB {title.score}</span></article>)}</div><div className="discover-more" ref={sentinel}>{loadingMore ? "Loading more great picks…" : hasMore ? "Keep scrolling for more" : "You’ve reached the end for now."}</div>{hasMore && !loadingMore && <button className="secondary discover-more-button" onClick={() => void loadMore()}>Load more</button>}</> : <div className="panel discover-empty"><b>Live titles are not available just now.</b><p>Try using the search at the top to find a movie, show, actor, or actress.</p></div>}</section>;
 }
 
@@ -656,14 +664,89 @@ function CompactCirclePage({ onInvite }: { onInvite: () => void }) {
   const [groups, setGroups] = useState<CircleGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<CircleFriend | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupMessage, setGroupMessage] = useState("");
+  const [invitingGroup, setInvitingGroup] = useState<CircleGroup | null>(null);
   const load = () => { setLoading(true); void fetch("/api/circle").then(response => response.ok ? response.json() as Promise<{ friends?: CircleFriend[]; groups?: CircleGroup[] }> : null).then(data => { setFriends(data?.friends ?? []); setGroups(data?.groups ?? []); }).finally(() => setLoading(false)); };
   useEffect(load, []);
   const initials = (name: string) => name.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
+  const createGroup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = groupName.trim();
+    if (!name) return;
+    setGroupMessage("Creating your group…");
+    try {
+      const response = await fetch("/api/circle", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+      const data = await response.json() as { group?: CircleGroup; error?: string };
+      if (!response.ok || !data.group) { setGroupMessage(data.error ?? "Your group could not be created."); return; }
+      setGroups(current => [data.group!, ...current]);
+      setGroupName("");
+      setCreating(false);
+      setGroupMessage("");
+    } catch {
+      setGroupMessage("Your group could not be created. Please try again.");
+    }
+  };
   const markRead = (id: string) => setFriends(current => current.map(friend => friend.id === id ? { ...friend, unreadMessages: false } : friend));
   return <section className="compact-circle"><section className="circle-section"><div className="section-title"><div><h2>Your friends <span>{friends.length ? `· ${friends.length}` : ""}</span></h2><p>Tap a friend to view their profile or send a message.</p></div><button onClick={onInvite}>Invite people</button></div>{loading ? <div className="panel circle-loading">Loading your circle…</div> : friends.length ? <div className="panel circle-friends compact-friends">{friends.map(friend => <button className={`friend-profile-link ${friend.unreadMessages ? "has-unread" : ""}`} key={friend.id} onClick={() => setSelected(friend)}><Avatar imageUrl={friend.avatarUrl}>{initials(friend.displayName)}</Avatar><b>{friend.displayName}</b></button>)}</div> : <div className="panel circle-empty"><div><b>Your circle starts with your people.</b><p>Invite family and friends to swap recommendations and compare reviews.</p></div><button className="primary" onClick={onInvite}>Invite people</button></div>}</section><section className="circle-section"><div className="section-title"><div><h2>Your groups <span>{groups.length ? `· ${groups.length}` : ""}</span></h2><p>Private spaces for movie nights, families, and favorite shows.</p></div></div>{groups.length ? <div className="group-grid live-group-grid">{groups.map((group, index) => <article className={`panel group live-group tone-${index % 3}`} key={group.id}><i>{index % 3 === 0 ? "✦" : index % 3 === 1 ? "⌂" : "◉"}</i><h3>{group.name}</h3><p>{group.memberCount} {group.memberCount === 1 ? "member" : "members"} · {group.pickCount} shared {group.pickCount === 1 ? "pick" : "picks"}</p></article>)}</div> : <div className="panel circle-empty"><div><b>Create a home for your next watch.</b><p>Start a private group for your family, friend group, or recurring movie night.</p></div></div>}</section>{selected && <FriendChatProfileModal friend={selected} onClose={() => setSelected(null)} onRead={() => markRead(selected.id)}/>}</section>;
 }
 
-function CirclePage({ onInvite, onOpen }: { onInvite: () => void; onOpen: (title?: string, meta?: string, score?: string) => void }) { return <><CompactPeopleFinder/><CompactCirclePage onInvite={onInvite}/><MovieNightPanel/></>; }
+function CompactCirclePageV2({ onInvite }: { onInvite: () => void }) {
+  const [friends, setFriends] = useState<CircleFriend[]>([]);
+  const [groups, setGroups] = useState<CircleGroup[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [message, setMessage] = useState("");
+  const [selected, setSelected] = useState<CircleFriend | null>(null);
+  const [invitingGroup, setInvitingGroup] = useState<CircleGroup | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    void fetch("/api/circle")
+      .then(response => response.ok ? response.json() as Promise<{ friends?: CircleFriend[]; groups?: CircleGroup[] }> : null)
+      .then(data => { setFriends(data?.friends ?? []); setGroups(data?.groups ?? []); })
+      .catch(() => { setFriends([]); setGroups([]); })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
+  const initials = (name: string) => name.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
+  const createGroup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = groupName.trim();
+    if (!name) return;
+    setMessage("Creating your group...");
+    try {
+      const response = await fetch("/api/circle", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+      const data = await response.json() as { group?: CircleGroup; error?: string };
+      if (!response.ok || !data.group) { setMessage(data.error ?? "Your group could not be created."); return; }
+      setGroups(current => [data.group!, ...current]);
+      setGroupName("");
+      setCreating(false);
+      setMessage("");
+    } catch {
+      setMessage("Your group could not be created. Please try again.");
+    }
+  };
+
+  return <section className="compact-circle">
+    <section className="circle-section">
+      <div className="section-title"><div><h2>Your friends <span>{friends.length ? `· ${friends.length}` : ""}</span></h2><p>Tap a friend to view their profile or send a message.</p></div><button onClick={onInvite}>Invite people</button></div>
+      {loading ? <div className="panel circle-loading">Loading your circle...</div> : friends.length ? <div className="panel circle-friends compact-friends">{friends.map(friend => <button className={`friend-profile-link ${friend.unreadMessages ? "has-unread" : ""}`} key={friend.id} onClick={() => setSelected(friend)}><Avatar imageUrl={friend.avatarUrl}>{initials(friend.displayName)}</Avatar><b>{friend.displayName}</b></button>)}</div> : <div className="panel circle-empty"><div><b>Your circle starts with your people.</b><p>Invite family and friends to swap recommendations and compare reviews.</p></div><button className="primary" onClick={onInvite}>Invite people</button></div>}
+    </section>
+    <section className="circle-section">
+      <div className="section-title"><div><h2>Your groups <span>{groups.length ? `· ${groups.length}` : ""}</span></h2><p>Private spaces for movie nights, families, and favorite shows.</p></div><button className="primary compact-create-group" onClick={() => { setCreating(true); setMessage(""); }}>+ Create group</button></div>
+      {creating && <form className="panel group-creator" onSubmit={createGroup}><label>GROUP NAME<input value={groupName} onChange={event => setGroupName(event.target.value)} placeholder="Movie night crew" maxLength={60} autoFocus/></label><div><button type="button" className="secondary" onClick={() => { setCreating(false); setMessage(""); }}>Cancel</button><button className="primary" type="submit">Create group</button></div>{message && <small>{message}</small>}</form>}
+      {loading ? <div className="panel circle-loading">Loading your groups...</div> : groups.length ? <div className="group-grid live-group-grid">{groups.map((group, index) => <article className={`panel group live-group tone-${index % 3}`} key={group.id}><i>{index % 3 === 0 ? "✦" : index % 3 === 1 ? "⌂" : "◉"}</i><h3>{group.name}</h3><p>{group.memberCount} {group.memberCount === 1 ? "member" : "members"} · {group.pickCount} shared {group.pickCount === 1 ? "pick" : "picks"}</p>{group.isOwner && <button className="group-invite" onClick={() => setInvitingGroup(group)}>Invite a friend</button>}</article>)}</div> : !creating && <div className="panel circle-empty"><div><b>Create a home for your next watch.</b><p>Start a private group for your family, friend group, or recurring movie night.</p></div><button className="primary" onClick={() => setCreating(true)}>Create a group</button></div>}
+    </section>
+    {selected && <FriendChatProfileModal friend={selected} onClose={() => setSelected(null)} onRead={() => setFriends(current => current.map(friend => friend.id === selected.id ? { ...friend, unreadMessages: false } : friend))}/>} 
+    {invitingGroup && <GroupInviteModal group={invitingGroup} friends={friends} onClose={() => setInvitingGroup(null)} onInvited={() => { setInvitingGroup(null); load(); }} />}
+  </section>;
+}
+
+function CirclePage({ onInvite, onOpen }: { onInvite: () => void; onOpen: (title?: string, meta?: string, score?: string) => void }) { return <><CompactPeopleFinder/><CompactCirclePageV2 onInvite={onInvite}/><MovieNightPanel/></>; }
 
 type PersonCard = { id: string; displayName: string; username: string | null; avatarUrl: string | null; bio: string | null; relationship: "none" | "incoming" | "outgoing" | "friend"; requestId?: string | null; mutualCount?: number };
 
