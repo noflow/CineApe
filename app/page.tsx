@@ -271,8 +271,23 @@ function RecommendationModal({ title, onClose, onSent }: { title: ShareTitle; on
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("Loading your friends…");
   useEffect(() => { let active = true; void fetch("/api/circle").then(response => response.ok ? response.json() as Promise<{ friends?: CircleChoice[] }> : null).then(data => { if (active) { setFriends(data?.friends ?? []); setMessage(data?.friends?.length ? "" : "Invite someone to your Circle before sending a recommendation."); } }).catch(() => { if (active) setMessage("Your friends could not be loaded."); }); return () => { active = false; }; }, []);
-  const send = async () => { if (!recipientId || saving) return; setSaving(true); setMessage(""); const response = await fetch("/api/recommendations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...title, recipientId, note }) }); const data = await response.json() as { error?: string }; if (!response.ok) { setMessage(data.error ?? "Your recommendation could not be sent."); setSaving(false); return; } const friend = friends.find(item => item.id === recipientId); onSent(friend?.displayName ?? "your friend"); };
-  return <div className="backdrop" onClick={onClose}><div className="modal share-modal" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button><p className="eyebrow">SEND A RECOMMENDATION</p><h2>Make this pick personal.</h2><div className="selected-title">{title.posterPath ? <img src={title.posterPath} alt="" /> : <span></span>}<b>{title.name}<small>{title.year ?? "—"} · {title.type === "tv" ? "TV series" : "Movie"}</small></b></div><label>SEND TO</label>{friends.length ? <div className="share-people">{friends.map(friend => <button key={friend.id} className={recipientId === friend.id ? "chosen" : ""} onClick={() => setRecipientId(friend.id)}>{friend.avatarUrl ? <img src={friend.avatarUrl} alt="" /> : <span>{friend.displayName?.slice(0, 1)}</span>}<b>{friend.displayName}</b></button>)}</div> : <p className="share-empty">{message}</p>}<label>ADD A NOTE <small>(optional)</small></label><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Why will they love it?" maxLength={1000}/><button className="primary wide" disabled={!recipientId || saving} onClick={() => void send()}>{saving ? "Sending…" : "Send recommendation ✦"}</button>{message && friends.length > 0 && <small className="modal-message">{message}</small>}</div></div>;
+  const send = async () => {
+    if (saving) return;
+    if (!recipientId) { setMessage("Choose someone in your Circle first."); return; }
+    setSaving(true); setMessage("");
+    try {
+      const response = await fetch("/api/recommendations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...title, recipientId, note }) });
+      const data = await response.json().catch(() => ({})) as { error?: string };
+      if (!response.ok) { setMessage(data.error ?? "Your recommendation could not be sent. Please try again."); setSaving(false); return; }
+      const friend = friends.find(item => item.id === recipientId);
+      setSaving(false);
+      onSent(friend?.displayName ?? "your friend");
+    } catch {
+      setMessage("Your recommendation could not be sent. Check your connection and try again.");
+      setSaving(false);
+    }
+  };
+  return <div className="backdrop" onClick={onClose}><form className="modal share-modal" onClick={event => event.stopPropagation()} onSubmit={event => { event.preventDefault(); void send(); }}><button type="button" className="close" onClick={onClose}>×</button><p className="eyebrow">SEND A RECOMMENDATION</p><h2>Send this pick.</h2><p className="share-shortcut">Choose a friend and send it right away, or add your own note.</p><div className="selected-title">{title.posterPath ? <img src={title.posterPath} alt="" /> : <span></span>}<b>{title.name}<small>{title.year ?? "—"} · {title.type === "tv" ? "TV series" : "Movie"}</small></b></div><label>SEND TO</label>{friends.length ? <div className="share-people">{friends.map(friend => <button type="button" key={friend.id} className={recipientId === friend.id ? "chosen" : ""} onClick={() => { setRecipientId(friend.id); setMessage(""); }}>{friend.avatarUrl ? <img src={friend.avatarUrl} alt="" /> : <span>{friend.displayName?.slice(0, 1)}</span>}<b>{friend.displayName}</b></button>)}</div> : <p className="share-empty">{message}</p>}<label>ADD A NOTE <small>Optional</small></label><textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Leave blank to send: “I thought you’d like this.”" maxLength={1000}/><button type="submit" className="primary wide" disabled={!recipientId || saving}>{saving ? "Sending…" : note.trim() ? "Send with note ✦" : "Send recommendation ✦"}</button>{message && friends.length > 0 && <small className="modal-message">{message}</small>}</form></div>;
 }
 
 function GroupPickModal({ title, onClose, onSaved }: { title: ShareTitle; onClose: () => void; onSaved: (name: string) => void }) {
@@ -1029,22 +1044,28 @@ function TitleDetails({ selection, onBack, onOpenTitle, onRecommend, onAddToGrou
     const poster = target?.closest(".live-poster");
     if (!poster || !window.matchMedia("(max-width: 620px)").matches) return;
     const trailer = poster.closest(".live-title-page")?.querySelector<HTMLIFrameElement>(".trailer-frame iframe")?.src;
-    if (trailer) setMobileTrailer(trailer);
+    if (trailer) {
+      // Request full-screen during the poster tap itself. iPhone treats this
+      // as a user gesture, while the inline YouTube player can still autoplay.
+      const requestFullscreen = document.documentElement.requestFullscreen;
+      if (requestFullscreen) void requestFullscreen.call(document.documentElement).catch(() => undefined);
+      setMobileTrailer(trailer);
+    }
   };
   return <div className="cast-click-zone" onClick={onTitleClick}><TitleDetailsLegacy selection={selection} onBack={onBack} onRecommend={onRecommend} onAddToGroup={onAddToGroup}/>{castName && <CastFilmographyModal name={castName} onClose={() => setCastName(null)} onOpenTitle={onOpenTitle}/>} {mobileTrailer && <MobileTrailerModal src={mobileTrailer} title={selection.title} onClose={() => setMobileTrailer(null)}/>}</div>;
 }
 
 function MobileTrailerModal({ src, title, onClose }: { src: string; title: string; onClose: () => void }) {
   // iOS blocks automatic playback with sound. Starting muted lets the trailer
-  // begin from the poster tap. playsinline=0 tells YouTube to use its native
-  // fullscreen playback on iPhone instead of remaining embedded in the page.
+  // begin from the poster tap. CineApe owns the full-screen view, which avoids
+  // YouTube's native iPhone player pausing before its first frame.
   const embeddedSrc = src.replace("www.youtube.com", "www.youtube-nocookie.com");
   const pageOrigin = typeof window === "undefined" ? "" : `&origin=${encodeURIComponent(window.location.origin)}`;
-  const autoplaySrc = `${embeddedSrc}${embeddedSrc.includes("?") ? "&" : "?"}autoplay=1&mute=1&playsinline=0&enablejsapi=1&fs=1&rel=0${pageOrigin}`;
+  const autoplaySrc = `${embeddedSrc}${embeddedSrc.includes("?") ? "&" : "?"}autoplay=1&mute=1&playsinline=1&enablejsapi=1&fs=1&rel=0${pageOrigin}`;
   const close = () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined); onClose(); };
   const startPlayback = (frame: HTMLIFrameElement) => {
-    // Some mobile YouTube players ignore autoplay while switching into native
-    // fullscreen. Give the player an explicit supported play command as well.
+    // Keep an explicit supported play command as a fallback for mobile players
+    // that defer the autoplay request while the full-screen overlay opens.
     const playCommand = JSON.stringify({ event: "command", func: "playVideo", args: "" });
     [0, 250, 700].forEach(delay => window.setTimeout(() => frame.contentWindow?.postMessage(playCommand, "https://www.youtube-nocookie.com"), delay));
   };

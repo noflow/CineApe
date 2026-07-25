@@ -40,7 +40,9 @@ export async function POST(request: Request) {
   const member = await memberFor(userId);
   if (!member) return Response.json({ error: "Profile not found." }, { status: 404 });
   const body = await request.json() as { recipientId?: string; tmdbId?: number; type?: "movie" | "tv"; name?: string; year?: number | null; posterPath?: string | null; note?: string };
-  const note = body.note?.trim().slice(0, 1000) || null;
+  // A note is a nice touch, but never a requirement. This gives every simple
+  // recommendation a friendly message in the recipient's inbox.
+  const note = body.note?.trim().slice(0, 1000) || "I thought you'd like this.";
   if (!body.recipientId || !Number.isInteger(body.tmdbId) || !body.name?.trim() || (body.type !== "movie" && body.type !== "tv")) return Response.json({ error: "Choose a friend and a valid title." }, { status: 400 });
   const tmdbId = body.tmdbId!;
   const type = body.type as "movie" | "tv";
