@@ -47,7 +47,11 @@ export async function GET(request: Request) {
   if (!allowed) return Response.json({ error: "This chat is private to your CineApe Circle." }, { status: 403 });
   const condition = friendId ? or(and(eq(chatMessages.senderId, member.id), eq(chatMessages.recipientId, friendId)), and(eq(chatMessages.senderId, friendId), eq(chatMessages.recipientId, member.id))) : eq(chatMessages.groupId, groupId!);
   const rows = await db.select({ id: chatMessages.id, body: chatMessages.body, createdAt: chatMessages.createdAt, senderId: chatMessages.senderId, senderName: users.displayName, senderAvatar: users.avatarUrl, titleId: titles.id, title: titles.name, titleType: titles.type, year: titles.releaseYear, posterPath: titles.posterPath }).from(chatMessages).innerJoin(users, eq(chatMessages.senderId, users.id)).leftJoin(titles, eq(chatMessages.titleId, titles.id)).where(condition).orderBy(desc(chatMessages.createdAt)).limit(100);
-  if (friendId) await db.update(notifications).set({ readAt: new Date(), updatedAt: new Date() }).where(and(eq(notifications.userId, member.id), eq(notifications.link, `chat:friend:${friendId}`)));
+  // Opening a conversation clears only that conversation's in-app alerts.
+  // Group messages notify every other member when they are posted.
+  const notificationLink = friendId ? `chat:friend:${friendId}` : `chat:group:${groupId}`;
+  await db.update(notifications).set({ readAt: new Date(), updatedAt: new Date() })
+    .where(and(eq(notifications.userId, member.id), eq(notifications.link, notificationLink)));
   return Response.json({ viewerId: member.id, messages: rows.reverse().map(row => ({ id: row.id, body: row.body, createdAt: row.createdAt, sender: { id: row.senderId, displayName: row.senderName, avatarUrl: row.senderAvatar }, title: row.titleId ? { id: row.titleId, name: row.title!, type: row.titleType!, year: row.year, posterPath: row.posterPath } : null })) });
 }
 
