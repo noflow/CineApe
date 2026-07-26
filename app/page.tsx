@@ -5,6 +5,7 @@ import { Show, SignInButton, SignUpButton, UserButton, useUser } from "@clerk/ne
 
 type Page = "Home" | "Discover" | "For You" | "Friends & Groups" | "My Profile" | "Studio" | "Title";
 type SearchResult = { id: number; type: "movie" | "tv" | "person"; title: string; year: string | null; image: string | null; subtitle: string };
+type TitleSelection = { title: string; meta: string; score: string; tmdbId?: number; type?: "movie" | "tv" };
 type ShareTitle = { tmdbId: number; type: "movie" | "tv"; name: string; year: number | null; posterPath: string | null };
 type CircleChoice = { id: string; displayName?: string; avatarUrl?: string | null; name?: string; memberCount?: number; isOwner?: boolean };
 const titles = [
@@ -40,7 +41,7 @@ export default function Home() {
   const { isLoaded, isSignedIn, user } = useUser();
   const [page, setPage] = useState<Page>("Home");
   const [navigationReady, setNavigationReady] = useState(false);
-  const [selectedTitle, setSelectedTitle] = useState({ title: "Mickey 17", meta: "2025 · Science fiction", score: "8.2" });
+  const [selectedTitle, setSelectedTitle] = useState<TitleSelection>({ title: "Mickey 17", meta: "2025 · Science fiction", score: "8.2" });
   const [modal, setModal] = useState<"recommend" | "groupPick" | "quickRecommend" | null>(null);
   const [toast, setToast] = useState("");
   const [watching, setWatching] = useState<string[]>(["Slow Horses"]);
@@ -55,7 +56,7 @@ export default function Home() {
   const [needsDisplayName, setNeedsDisplayName] = useState(false);
   const [discoverResume, setDiscoverResume] = useState<DiscoverResume | null>(null);
   const flash = (message: string) => { setToast(message); window.setTimeout(() => setToast(""), 2800); };
-  const openTitle = (title = "Mickey 17", meta = "2025 · Science fiction", score = "8.2") => { setSelectedTitle({ title, meta, score }); setPage("Title"); };
+  const openTitle = (title = "Mickey 17", meta = "2025 · Science fiction", score = "8.2", tmdbId?: number, type?: "movie" | "tv") => { setSelectedTitle({ title, meta, score, tmdbId, type }); setPage("Title"); };
   const desktopNav = ["Home", "Discover", "For You", "Friends & Groups", "My Profile", ...(isAdmin ? ["Studio" as Page] : [])] as Page[];
   const mobileNav = ["Home", "Discover", "For You", "Friends & Groups", "My Profile"] as Page[];
   const navIcon = (item: Page) => ({ "Home": "⌂", "Discover": "⌕", "For You": "✦", "Friends & Groups": "♧", "My Profile": "◉", "Studio": "✎", "Title": "" }[item]);
@@ -147,7 +148,7 @@ export default function Home() {
 
   return <div className="app-shell">
     <aside className="sidebar"><button className="brand" onClick={() => setPage("Home")} aria-label="CineApe home"><img src="/cineape-logo.png" alt="CineApe"/></button><p>MENU</p><nav className="desktop-nav">{desktopNav.map(item => <button key={item} className={shown === item ? "active" : ""} onClick={() => setPage(item)}><span>{navIcon(item)}</span>{item}</button>)}</nav><nav className="mobile-nav">{mobileNav.map(item => <button key={item} className={shown === item ? "active" : ""} onClick={() => setPage(item)}><span>{navIcon(item)}</span>{item}</button>)}</nav></aside>
-    <main><header><button className="mobile-brand" onClick={() => setPage("Home")}><i></i>CineApe</button><label className="search">⌕<input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search movies, shows, people..." aria-label="Search movies, shows, actors, and actresses"/>{searchQuery.trim().length >= 2 && <div className="search-results">{searching && <p>Searching CineApe…</p>}{!searching && searchResults.map(result => result.type === "person" ? <div className="search-result person-result" key={`${result.type}-${result.id}`}>{result.image ? <img src={result.image} alt="" /> : <span>{result.title.slice(0, 1)}</span>}<div><b>{result.title}</b><small>{result.subtitle}</small></div><em>Person</em></div> : <button className="search-result" key={`${result.type}-${result.id}`} onClick={() => { setSearchQuery(""); setSearchResults([]); openTitle(result.title, `${result.year ?? "—"} · ${result.type === "tv" ? "TV series" : "Movie"}`, "—"); }}>{result.image ? <img src={result.image} alt="" /> : <span>{result.title.slice(0, 1)}</span>}<div><b>{result.title}</b><small>{result.subtitle}</small></div><em>{result.type === "tv" ? "TV" : "Movie"}</em></button>)}{!searching && !searchResults.length && <p>No movies, shows, or people found.</p>}</div>}</label><div><button className="bell" aria-label="Notifications" onClick={() => setNotificationsOpen(true)}>♧</button>{recommend()}</div></header>
+    <main><header><button className="mobile-brand" onClick={() => setPage("Home")}><i></i>CineApe</button><label className="search">⌕<input value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search movies, shows, people..." aria-label="Search movies, shows, actors, and actresses"/>{searchQuery.trim().length >= 2 && <div className="search-results">{searching && <p>Searching CineApe…</p>}{!searching && searchResults.map(result => result.type === "person" ? <div className="search-result person-result" key={`${result.type}-${result.id}`}>{result.image ? <img src={result.image} alt="" /> : <span>{result.title.slice(0, 1)}</span>}<div><b>{result.title}</b><small>{result.subtitle}</small></div><em>Person</em></div> : <button className="search-result" key={`${result.type}-${result.id}`} onClick={() => { setSearchQuery(""); setSearchResults([]); openTitle(result.title, `${result.year ?? "—"} · ${result.type === "tv" ? "TV series" : "Movie"}`, "—", result.id, result.type as "movie" | "tv"); }}>{result.image ? <img src={result.image} alt="" /> : <span>{result.title.slice(0, 1)}</span>}<div><b>{result.title}</b><small>{result.subtitle}</small></div><em>{result.type === "tv" ? "TV" : "Movie"}</em></button>)}{!searching && !searchResults.length && <p>No movies, shows, or people found.</p>}</div>}</label><div><button className="bell" aria-label="Notifications" onClick={() => setNotificationsOpen(true)}>♧</button>{recommend()}</div></header>
 
     {page === "Home" && <section className="page home"><div className="hero onboarding-hero"><div><p className="eyebrow">WELCOME TO CINEAPE, {firstName.toUpperCase()}</p><h1>Your circle starts with one great pick.</h1><p>Catch new releases, see what your Circle is watching, and never lose a good recommendation.</p><button className="light-button" onClick={() => setPage("Discover")}>Discover movies and shows →</button></div><div className="poster-stack"><span className="poster poster-1">YOUR<br/>NEXT</span><span className="poster poster-2">GREAT<br/>PICK</span><span className="poster poster-3">START<br/>HERE</span></div></div><HomeCategories onOpen={openTitle} onInvite={() => setInviteOpen(true)} /></section>}
 
@@ -1012,7 +1013,7 @@ type CommunityReview = { score: number; review: string | null; createdAt: string
 type OfficialReview = CommunityReview & { slug: string };
 type PersonalStatus = "watchlist" | "watching" | "completed" | null;
 
-function TitleDetailsLegacy({ selection, onBack, onRecommend, onAddToGroup }: { selection: { title: string; meta: string; score: string }; onBack: () => void; onRecommend: (title: ShareTitle) => void; onAddToGroup: (title: ShareTitle) => void }) {
+function TitleDetailsLegacy({ selection, onBack, onRecommend, onAddToGroup }: { selection: TitleSelection; onBack: () => void; onRecommend: (title: ShareTitle) => void; onAddToGroup: (title: ShareTitle) => void }) {
   const [details, setDetails] = useState<LiveTitle | null>(null);
   const [reviews, setReviews] = useState<CommunityReview[]>([]);
   const [community, setCommunity] = useState<{ average: number | null; count: number }>({ average: null, count: 0 });
@@ -1027,7 +1028,10 @@ function TitleDetailsLegacy({ selection, onBack, onRecommend, onAddToGroup }: { 
   useEffect(() => {
     let active = true;
     setLoading(true); setDetails(null); setReviews([]); setCommunity({ average: null, count: 0 }); setReview(""); setMessage(""); setPersonalStatus(null);
-    void fetch(`/api/tmdb?query=${encodeURIComponent(selection.title)}`).then(response => response.ok ? response.json() : null)
+    const selectedMatch = selection.tmdbId && selection.type
+      ? Promise.resolve({ id: selection.tmdbId, type: selection.type })
+      : fetch(`/api/tmdb?query=${encodeURIComponent(selection.title)}`).then(response => response.ok ? response.json() : null);
+    void selectedMatch
       .then(async (match: { id?: number; type?: "movie" | "tv" } | null) => {
         if (!match?.id || !match.type || !active) return;
         const localeCountry = navigator.language.split("-")[1]?.toUpperCase() === "CA" ? "CA" : "US";
@@ -1046,7 +1050,7 @@ function TitleDetailsLegacy({ selection, onBack, onRecommend, onAddToGroup }: { 
         if (active) { setReviews([...(communityData.officialReviews ?? []), ...communityData.reviews]); setCommunity({ average: communityData.average, count: communityData.count }); }
       }).catch(() => undefined).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [selection.title]);
+  }, [selection.title, selection.tmdbId, selection.type]);
 
   const saveReview = async () => {
     if (!details) return;
@@ -1088,7 +1092,7 @@ function mobileTrailerSource(src: string) {
   return trailerUrl.toString();
 }
 
-function TitleDetails({ selection, onBack, onOpenTitle, onRecommend, onAddToGroup }: { selection: { title: string; meta: string; score: string }; onBack: () => void; onOpenTitle: (title: string, meta: string, score: string) => void; onRecommend: (title: ShareTitle) => void; onAddToGroup: (title: ShareTitle) => void }) {
+function TitleDetails({ selection, onBack, onOpenTitle, onRecommend, onAddToGroup }: { selection: TitleSelection; onBack: () => void; onOpenTitle: (title: string, meta: string, score: string) => void; onRecommend: (title: ShareTitle) => void; onAddToGroup: (title: ShareTitle) => void }) {
   const [castName, setCastName] = useState<string | null>(null);
   const [mobileTrailer, setMobileTrailer] = useState<string | null>(null);
   const onTitleClick = (event: React.MouseEvent<HTMLDivElement>) => {
