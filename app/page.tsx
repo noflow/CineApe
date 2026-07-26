@@ -67,9 +67,9 @@ export default function Home() {
     try {
       const saved = sessionStorage.getItem("cineape-navigation-v1");
       if (saved) {
-        const data = JSON.parse(saved) as { page?: Page; selectedTitle?: { title?: string; meta?: string; score?: string } };
+        const data = JSON.parse(saved) as { page?: Page; selectedTitle?: TitleSelection };
         if (["Home", "Discover", "For You", "Friends & Groups", "My Profile", "Studio", "Title"].includes(data.page ?? "")) setPage(data.page as Page);
-        if (data.selectedTitle?.title && data.selectedTitle.meta && data.selectedTitle.score) setSelectedTitle({ title: data.selectedTitle.title, meta: data.selectedTitle.meta, score: data.selectedTitle.score });
+        if (data.selectedTitle?.title && data.selectedTitle.meta && data.selectedTitle.score) setSelectedTitle({ title: data.selectedTitle.title, meta: data.selectedTitle.meta, score: data.selectedTitle.score, tmdbId: data.selectedTitle.tmdbId, type: data.selectedTitle.type === "tv" || data.selectedTitle.type === "movie" ? data.selectedTitle.type : undefined });
       }
     } catch { /* Ignore an invalid saved screen. */ }
     setNavigationReady(true);
@@ -149,7 +149,7 @@ export default function Home() {
   const displayName = accountDisplayName || clerkDisplayName;
   const firstName = displayName.split(" ")[0] || "there";
   const movieCards = (limit = 4) => <div className="cards">{titles.slice(0, limit).map(([title, meta, score, tone]) => <div className="media-card" key={title}><Cover title={title} meta={meta} score={score} tone={tone} onClick={() => openTitle(title, meta, score)}/><strong>{title}</strong><span>Save it to your watchlist</span></div>)}</div>;
-  const recommend = () => page === "Friends & Groups" ? null : <button className="primary recommend-action" onClick={() => setModal("quickRecommend")}>+ Recommend</button>;
+  const recommend = () => page === "Friends & Groups" ? null : <button type="button" className="primary recommend-action" onClick={() => setModal("quickRecommend")} aria-label="Recommend a movie or show" data-tooltip="Recommend a movie or show"><span aria-hidden="true">+</span></button>;
   const chooseShareTitle = (title: ShareTitle, mode: "recommend" | "groupPick") => { setShareTitle(title); setModal(mode); };
 
   if (!isLoaded) return <div className="session-loading" aria-label="Loading CineApe"><span></span></div>;
@@ -575,7 +575,7 @@ function DiscoverPageWithPaginationLegacy({ onOpen }: { onOpen: (title?: string,
 
 type DiscoverResume = { filter: "all" | "movie" | "tv"; category: string; titles: DiscoverTitle[]; nextPage: number; hasMore: boolean; scrollY: number };
 
-function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string, meta?: string, score?: string) => void; resume: DiscoverResume | null; onSnapshot: (snapshot: DiscoverResume) => void }) {
+function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string, meta?: string, score?: string, tmdbId?: number, type?: "movie" | "tv") => void; resume: DiscoverResume | null; onSnapshot: (snapshot: DiscoverResume) => void }) {
   const [filter, setFilter] = useState<"all" | "movie" | "tv">(() => resume?.filter ?? "all");
   const [category, setCategory] = useState(() => resume?.category ?? "all");
   const [titles, setTitles] = useState<DiscoverTitle[]>(() => resume?.titles ?? []);
@@ -600,7 +600,7 @@ function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string,
   }, [filter, category]);
   const loadMore = async () => { if (loading || loadingMore || !hasMore) return; setLoadingMore(true); try { const data = await fetchTitles(nextPage); const more = data.titles ?? []; setTitles(current => { const existing = new Set(current.map(title => `${title.type}-${title.id}`)); return [...current, ...more.filter(title => !existing.has(`${title.type}-${title.id}`))]; }); setHasMore(Boolean(data.hasMore) && more.length > 0); setNextPage(current => current + 1); } catch { setHasMore(false); } finally { setLoadingMore(false); } };
   useEffect(() => { const node = sentinel.current; if (!node || !hasMore || loading) return; const observer = new IntersectionObserver(entries => { if (entries[0]?.isIntersecting) void loadMore(); }, { rootMargin: "420px" }); observer.observe(node); return () => observer.disconnect(); }, [hasMore, loading, loadingMore, nextPage, titles.length]);
-  const rememberAndOpen = (title: DiscoverTitle) => { onSnapshot({ filter, category, titles, nextPage, hasMore, scrollY: window.scrollY }); onOpen(title.title, `${title.year ?? "—"} · ${title.type === "tv" ? "TV series" : "Movie"}`, title.score); };
+  const rememberAndOpen = (title: DiscoverTitle) => { onSnapshot({ filter, category, titles, nextPage, hasMore, scrollY: window.scrollY }); onOpen(title.title, `${title.year ?? "—"} · ${title.type === "tv" ? "TV series" : "Movie"}`, title.score, title.id, title.type); };
   const filters = [{ key: "all", label: "Popular now" }, { key: "movie", label: "Movies" }, { key: "tv", label: "TV shows" }] as const;
   const categories = filter === "movie" ? [
     { key: "all", label: "All movies" }, { key: "new", label: "New releases" }, { key: "past6months", label: "Past 6 months" }, { key: "pastyear", label: "Past year" }, { key: "upcoming", label: "Coming soon" },
@@ -992,7 +992,7 @@ function GroupSpaceModal({ group, onClose, onOpen }: { group: CircleGroup; onClo
 
 type HomeRelease = { id: number; type: "movie" | "tv"; title: string; year: string | null; image: string | null; score: string };
 
-function HomeCategories({ onOpen, onInvite }: { onOpen: (title?: string, meta?: string, score?: string) => void; onInvite: () => void }) {
+function HomeCategories({ onOpen, onInvite }: { onOpen: (title?: string, meta?: string, score?: string, tmdbId?: number, type?: "movie" | "tv") => void; onInvite: () => void }) {
   const [movies, setMovies] = useState<HomeRelease[]>([]);
   const [shows, setShows] = useState<HomeRelease[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1003,7 +1003,7 @@ function HomeCategories({ onOpen, onInvite }: { onOpen: (title?: string, meta?: 
       .catch(() => undefined).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
-  const shelf = (title: string, subtitle: string, items: HomeRelease[]) => <section className="home-shelf"><div className="section-title"><div><h2>{title}</h2><p>{subtitle}</p></div><button>View all</button></div>{loading ? <div className="shelf-loading">Finding what’s new…</div> : <div className="cards">{items.slice(0, 4).map((item, index) => <div className="media-card" key={`${item.type}-${item.id}`}><button className={`cover ${["a", "b", "c", "d"][index]}`} onClick={() => onOpen(item.title, `${item.year ?? "—"} · ${item.type === "tv" ? "TV series" : "Movie"}`, item.score)}>{item.image && <img src={item.image} alt={`${item.title} poster`} />}<span className="cover-type">{item.type === "tv" ? "TV" : "Movie"}</span><span className="cover-score">★ {item.score}</span><span className="cover-title"><small>{item.year ?? "New release"}</small>{item.title}</span></button><strong>{item.title}</strong><span>{item.type === "tv" ? "New episodes airing now" : "Now playing"}</span></div>)}</div>}</section>;
+  const shelf = (title: string, subtitle: string, items: HomeRelease[]) => <section className="home-shelf"><div className="section-title"><div><h2>{title}</h2><p>{subtitle}</p></div><button>View all</button></div>{loading ? <div className="shelf-loading">Finding what’s new…</div> : <div className="cards">{items.slice(0, 4).map((item, index) => <div className="media-card" key={`${item.type}-${item.id}`}><button className={`cover ${["a", "b", "c", "d"][index]}`} onClick={() => onOpen(item.title, `${item.year ?? "—"} · ${item.type === "tv" ? "TV series" : "Movie"}`, item.score, item.id, item.type)}>{item.image && <img src={item.image} alt={`${item.title} poster`} />}<span className="cover-type">{item.type === "tv" ? "TV" : "Movie"}</span><span className="cover-score">★ {item.score}</span><span className="cover-title"><small>{item.year ?? "New release"}</small>{item.title}</span></button><strong>{item.title}</strong><span>{item.type === "tv" ? "New episodes airing now" : "Now playing"}</span></div>)}</div>}</section>;
   return <div className="home-categories">{shelf("New release movies", "Fresh films now playing and arriving soon.", movies)}{shelf("New release TV shows", "New and returning series to start tonight.", shows)}<section className="home-shelf friends-shelf"><div className="section-title"><div><h2>What your friends are currently watching</h2><p>Updates from the people in your Circle.</p></div></div><div className="panel friends-empty"><div><b>Your Circle is ready when they are.</b><p>Invite family and friends to see what they are watching, saving, and recommending.</p></div><button className="primary" onClick={onInvite}>Invite people</button></div></section></div>;
 }
 type LiveRecommendation = { id: string; titleId: string; status: "pending" | "watching" | "watched" | "not_interested"; note: string | null; recommendationScore?: number | null; title: string; type: "movie" | "tv"; year: number | null; posterPath: string | null; person: { displayName: string; avatarUrl: string | null } | null };
