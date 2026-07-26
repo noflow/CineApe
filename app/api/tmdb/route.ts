@@ -73,6 +73,24 @@ export async function GET(request: Request) {
         // Keep reality, talk, and news programming out of the regular TV shelves.
         // Reality remains available through its own deliberate filter.
         if (endpoint.type === "tv" && category !== "reality") url.searchParams.set("without_genres", "10764,10763,10767");
+        // Movie date shelves need a stronger quality floor than a simple release
+        // date. Otherwise they fill with low-interest VOD titles, shorts, and
+        // placeholder upcoming releases. Votes are a useful signal of awareness;
+        // the score floor removes the poorly received ones once they are out.
+        if (endpoint.type === "movie") {
+          const movieQuality = category === "upcoming" ? { votes: "30", score: null }
+            : category === "pastyear" ? { votes: "180", score: "5.7" }
+            : category === "past6months" ? { votes: "120", score: "5.5" }
+            : category === "new" ? { votes: "70", score: "5.3" }
+            : null;
+          if (movieQuality) {
+            url.searchParams.set("vote_count.gte", movieQuality.votes);
+            if (movieQuality.score) url.searchParams.set("vote_average.gte", movieQuality.score);
+            // Avoid shorts and most straight-to-catalog filler while keeping
+            // documentaries and animation that people genuinely seek out.
+            url.searchParams.set("with_runtime.gte", "70");
+          }
+        }
         if (category === "new" || category === "past6months" || category === "pastyear") {
           const date = new Date();
           // "New releases" should feel like the things people are actually
@@ -83,11 +101,13 @@ export async function GET(request: Request) {
           url.searchParams.set(`${dateField}.gte`, date.toISOString().slice(0, 10));
           url.searchParams.set(`${dateField}.lte`, today);
           if (category === "new") {
-            url.searchParams.set("vote_count.gte", endpoint.type === "movie" ? "50" : "20");
-            url.searchParams.set("vote_average.gte", "5.2");
+            if (endpoint.type === "tv") {
+              url.searchParams.set("vote_count.gte", "20");
+              url.searchParams.set("vote_average.gte", "5.2");
+            }
             // Movies under an hour are overwhelmingly shorts, specials, or
             // catalog filler rather than the releases CineApe members seek out.
-            if (endpoint.type === "movie") url.searchParams.set("with_runtime.gte", "60");
+            if (endpoint.type === "movie") url.searchParams.set("with_runtime.gte", "70");
           }
         } else if (category === "upcoming") {
           url.searchParams.set("sort_by", `${dateField}.asc`);
