@@ -36,10 +36,12 @@ export async function GET(request: Request) {
     if (mode === "home") {
       const headers = { Authorization: `Bearer ${token}`, accept: "application/json" };
       const period = params.get("period") === "week" ? "week" : "day";
-      const response = await fetch(`${API_BASE}/trending/all/${period}?language=en-US`, { headers, next: { revalidate: 60 * 30 } });
+      const requestedMedia = params.get("media");
+      const media = requestedMedia === "movie" || requestedMedia === "tv" ? requestedMedia : "all";
+      const response = await fetch(`${API_BASE}/trending/${media}/${period}?language=en-US`, { headers, next: { revalidate: 60 * 30 } });
       if (!response.ok) return Response.json({ titles: [] }, { status: 502 });
       const data = await response.json() as { results?: SearchItem[] };
-      const titles = (data.results ?? []).filter(item => (item.media_type === "movie" || item.media_type === "tv") && item.poster_path && (!item.original_language || item.original_language === "en")).slice(0, 20).map(item => ({
+      const titles = (data.results ?? []).map(item => ({ ...item, media_type: media === "all" ? item.media_type : media })).filter(item => (item.media_type === "movie" || item.media_type === "tv") && item.poster_path && (!item.original_language || item.original_language === "en")).slice(0, 20).map(item => ({
         id: item.id,
         type: item.media_type as "movie" | "tv",
         title: item.title ?? item.name ?? "Untitled",
@@ -48,7 +50,7 @@ export async function GET(request: Request) {
         image: poster(item.poster_path),
         score: item.vote_average ? item.vote_average.toFixed(1) : "—",
       }));
-      return Response.json({ titles, period }, { headers: { "Cache-Control": "public, max-age=300, s-maxage=1800" } });
+      return Response.json({ titles, period, media }, { headers: { "Cache-Control": "public, max-age=300, s-maxage=1800" } });
     }
     if (mode === "discover") {
       const requestedType = params.get("type");
