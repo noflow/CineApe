@@ -89,6 +89,15 @@ export const groupTitlePicks = pgTable("group_title_picks", {
   ...timestamps,
 }, (table) => [uniqueIndex("group_title_picks_group_title_unique").on(table.groupId, table.titleId)]);
 
+// Records when a group member saves somebody else's shared pick. This keeps
+// group recommendations distinct from direct, person-to-person recommendations.
+export const groupPickSaves = pgTable("group_pick_saves", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  groupPickId: uuid("group_pick_id").notNull().references(() => groupTitlePicks.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [uniqueIndex("group_pick_saves_pick_user_unique").on(table.groupPickId, table.userId)]);
+
 export const chatMessages = pgTable("chat_messages", {
   id: uuid("id").defaultRandom().primaryKey(),
   senderId: uuid("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),
