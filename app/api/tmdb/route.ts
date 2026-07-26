@@ -35,17 +35,20 @@ export async function GET(request: Request) {
   try {
     if (mode === "home") {
       const headers = { Authorization: `Bearer ${token}`, accept: "application/json" };
-      const [moviesResponse, showsResponse] = await Promise.all([
-        fetch(`${API_BASE}/movie/now_playing?language=en-US&page=1`, { headers, next: { revalidate: 60 * 60 * 6 } }),
-        fetch(`${API_BASE}/tv/on_the_air?language=en-US&page=1`, { headers, next: { revalidate: 60 * 60 * 6 } }),
-      ]);
-      if (!moviesResponse.ok || !showsResponse.ok) return Response.json({ movies: [], shows: [] }, { status: 502 });
-      const [moviesData, showsData] = await Promise.all([moviesResponse.json() as Promise<{ results?: SearchItem[] }>, showsResponse.json() as Promise<{ results?: SearchItem[] }>]);
-      const format = (items: SearchItem[], type: "movie" | "tv") => items.filter(item => item.poster_path).slice(0, 8).map(item => ({
-        id: item.id, type, title: item.title ?? item.name ?? "Untitled", year: item.release_date?.slice(0, 4) ?? item.first_air_date?.slice(0, 4) ?? null,
-        image: poster(item.poster_path), score: item.vote_average ? item.vote_average.toFixed(1) : "—",
+      const period = params.get("period") === "week" ? "week" : "day";
+      const response = await fetch(`${API_BASE}/trending/all/${period}?language=en-US`, { headers, next: { revalidate: 60 * 30 } });
+      if (!response.ok) return Response.json({ titles: [] }, { status: 502 });
+      const data = await response.json() as { results?: SearchItem[] };
+      const titles = (data.results ?? []).filter(item => (item.media_type === "movie" || item.media_type === "tv") && item.poster_path && (!item.original_language || item.original_language === "en")).slice(0, 20).map(item => ({
+        id: item.id,
+        type: item.media_type as "movie" | "tv",
+        title: item.title ?? item.name ?? "Untitled",
+        year: item.release_date?.slice(0, 4) ?? item.first_air_date?.slice(0, 4) ?? null,
+        date: item.release_date ?? item.first_air_date ?? null,
+        image: poster(item.poster_path),
+        score: item.vote_average ? item.vote_average.toFixed(1) : "—",
       }));
-      return Response.json({ movies: format(moviesData.results ?? [], "movie"), shows: format(showsData.results ?? [], "tv") }, { headers: { "Cache-Control": "public, max-age=900, s-maxage=21600" } });
+      return Response.json({ titles, period }, { headers: { "Cache-Control": "public, max-age=300, s-maxage=1800" } });
     }
     if (mode === "discover") {
       const requestedType = params.get("type");

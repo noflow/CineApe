@@ -177,6 +177,7 @@ export const notifications = pgTable("notifications", {
   message: text("message").notNull(),
   link: text("link"),
   readAt: timestamp("read_at", { withTimezone: true }),
+  clearedAt: timestamp("cleared_at", { withTimezone: true }),
   ...timestamps,
 });
 

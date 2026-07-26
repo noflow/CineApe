@@ -42,7 +42,9 @@ async function checkStreamingAlerts(memberId: string, country: "CA" | "US") {
       const message = `${title.name} is streaming on ${service.provider_name}`;
       const [existing] = await db!.select({ id: notifications.id, message: notifications.message }).from(notifications).where(and(eq(notifications.userId, memberId), eq(notifications.link, link))).limit(1);
       if (existing) {
-        if (existing.message !== message) await db!.update(notifications).set({ message, updatedAt: new Date() }).where(eq(notifications.id, existing.id));
+        // A previously cleared alert stays dismissed until the actual service changes.
+        // This keeps reopening the panel from recreating the same notification.
+        if (existing.message !== message) await db!.update(notifications).set({ message, readAt: null, clearedAt: null, updatedAt: new Date() }).where(eq(notifications.id, existing.id));
         return;
       }
       await db!.insert(notifications).values({ userId: memberId, kind: "streaming", message, link });
@@ -57,13 +59,13 @@ export async function GET(request: Request) {
   const member = await memberFor(userId);
   if (!member) return Response.json({ notifications: [], unread: 0 });
   if (new URL(request.url).searchParams.get("mode") === "unread") {
-    const [result] = await db.select({ value: count() }).from(notifications).where(and(eq(notifications.userId, member.id), isNull(notifications.readAt)));
+    const [result] = await db.select({ value: count() }).from(notifications).where(and(eq(notifications.userId, member.id), isNull(notifications.readAt), isNull(notifications.clearedAt)));
     return Response.json({ unread: result?.value ?? 0 }, { headers: { "Cache-Control": "no-store" } });
   }
   const country = new URL(request.url).searchParams.get("country") === "CA" ? "CA" : "US";
   await checkStreamingAlerts(member.id, country);
   const rows = await db.select({ id: notifications.id, kind: notifications.kind, message: notifications.message, link: notifications.link, createdAt: notifications.createdAt, readAt: notifications.readAt })
-    .from(notifications).where(eq(notifications.userId, member.id)).orderBy(desc(notifications.createdAt)).limit(20);
+    .from(notifications).where(and(eq(notifications.userId, member.id), isNull(notifications.clearedAt))).orderBy(desc(notifications.createdAt)).limit(20);
   return Response.json({ notifications: rows, unread: rows.filter(notification => !notification.readAt).length });
 }
 
@@ -83,6 +85,6 @@ export async function DELETE() {
   if (!db) return Response.json({ error: "Notifications are temporarily unavailable." }, { status: 503 });
   const member = await memberFor(userId);
   if (!member) return Response.json({ error: "Profile not found." }, { status: 404 });
-  await db.delete(notifications).where(eq(notifications.userId, member.id));
+  await db.update(notifications).set({ clearedAt: new Date(), readAt: new Date(), updatedAt: new Date() }).where(eq(notifications.userId, member.id));
   return Response.json({ status: "cleared" });
 }

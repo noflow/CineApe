@@ -99,6 +99,13 @@
       "when": 1785093012198,
       "tag": "0013_abandoned_thena",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1785100000000,
+      "tag": "0014_quiet_nova",
+      "breakpoints": true
     }
   ]
 }
