@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { db } from "../../db";
 import { notifications, titles, userTitleStates, users } from "../../db/schema";
 
@@ -56,6 +56,10 @@ export async function GET(request: Request) {
   if (!db) return Response.json({ notifications: [], unread: 0 });
   const member = await memberFor(userId);
   if (!member) return Response.json({ notifications: [], unread: 0 });
+  if (new URL(request.url).searchParams.get("mode") === "unread") {
+    const [result] = await db.select({ value: count() }).from(notifications).where(and(eq(notifications.userId, member.id), isNull(notifications.readAt)));
+    return Response.json({ unread: result?.value ?? 0 }, { headers: { "Cache-Control": "no-store" } });
+  }
   const country = new URL(request.url).searchParams.get("country") === "CA" ? "CA" : "US";
   await checkStreamingAlerts(member.id, country);
   const rows = await db.select({ id: notifications.id, kind: notifications.kind, message: notifications.message, link: notifications.link, createdAt: notifications.createdAt, readAt: notifications.readAt })
@@ -71,4 +75,14 @@ export async function PATCH() {
   if (!member) return Response.json({ error: "Profile not found." }, { status: 404 });
   await db.update(notifications).set({ readAt: new Date(), updatedAt: new Date() }).where(eq(notifications.userId, member.id));
   return Response.json({ status: "read" });
+}
+
+export async function DELETE() {
+  const { userId } = await auth();
+  if (!userId) return Response.json({ error: "Sign in required." }, { status: 401 });
+  if (!db) return Response.json({ error: "Notifications are temporarily unavailable." }, { status: 503 });
+  const member = await memberFor(userId);
+  if (!member) return Response.json({ error: "Profile not found." }, { status: 404 });
+  await db.delete(notifications).where(eq(notifications.userId, member.id));
+  return Response.json({ status: "cleared" });
 }

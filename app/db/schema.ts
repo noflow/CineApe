@@ -98,6 +98,16 @@ export const groupPickSaves = pgTable("group_pick_saves", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [uniqueIndex("group_pick_saves_pick_user_unique").on(table.groupPickId, table.userId)]);
 
+// Each member can leave one lightweight reaction on a shared group pick.
+export const groupPickReactions = pgTable("group_pick_reactions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  groupPickId: uuid("group_pick_id").notNull().references(() => groupTitlePicks.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  emoji: text("emoji").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [uniqueIndex("group_pick_reactions_pick_user_unique").on(table.groupPickId, table.userId)]);
+
 export const chatMessages = pgTable("chat_messages", {
   id: uuid("id").defaultRandom().primaryKey(),
   senderId: uuid("sender_id").notNull().references(() => users.id, { onDelete: "cascade" }),

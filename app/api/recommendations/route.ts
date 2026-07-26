@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "../../db";
-import { friendships, notifications, recommendations, titles, users } from "../../db/schema";
+import { friendships, notifications, recommendationRatings, recommendations, titles, users } from "../../db/schema";
 
 const statuses = ["pending", "watching", "watched", "not_interested"] as const;
 
@@ -24,9 +24,9 @@ export async function GET(request: Request) {
   if (status) conditions.push(eq(recommendations.status, status));
   const rows = await db.select({
     id: recommendations.id, status: recommendations.status, note: recommendations.note, createdAt: recommendations.createdAt,
-    senderId: recommendations.senderId, recipientId: recommendations.recipientId, titleId: titles.id,
+    senderId: recommendations.senderId, recipientId: recommendations.recipientId, titleId: titles.id, recommendationScore: recommendationRatings.score,
     title: titles.name, type: titles.type, year: titles.releaseYear, posterPath: titles.posterPath,
-  }).from(recommendations).innerJoin(titles, eq(recommendations.titleId, titles.id)).where(and(...conditions)).orderBy(desc(recommendations.createdAt));
+  }).from(recommendations).innerJoin(titles, eq(recommendations.titleId, titles.id)).leftJoin(recommendationRatings, eq(recommendationRatings.recommendationId, recommendations.id)).where(and(...conditions)).orderBy(desc(recommendations.createdAt));
   const peopleIds = rows.map(row => isSent ? row.recipientId : row.senderId);
   const people = peopleIds.length ? await db.select({ id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl }).from(users).where(inArray(users.id, peopleIds)) : [];
   const byId = new Map(people.map(person => [person.id, person]));
@@ -66,9 +66,19 @@ export async function PATCH(request: Request) {
   if (!db) return Response.json({ error: "Recommendations are temporarily unavailable." }, { status: 503 });
   const member = await memberFor(userId);
   if (!member) return Response.json({ error: "Profile not found." }, { status: 404 });
-  const body = await request.json() as { id?: string; status?: string };
-  if (!body.id || !body.status || !statuses.includes(body.status as typeof statuses[number])) return Response.json({ error: "Choose a valid recommendation status." }, { status: 400 });
-  const updated = await db.update(recommendations).set({ status: body.status as typeof statuses[number], updatedAt: new Date() }).where(and(eq(recommendations.id, body.id), eq(recommendations.recipientId, member.id))).returning({ id: recommendations.id });
-  if (!updated.length) return Response.json({ error: "Recommendation not found." }, { status: 404 });
+  const body = await request.json() as { id?: string; status?: string; rating?: number };
+  if (!body.id) return Response.json({ error: "Choose a recommendation." }, { status: 400 });
+  const [recommendation] = await db.select({ id: recommendations.id, status: recommendations.status }).from(recommendations).where(and(eq(recommendations.id, body.id), eq(recommendations.recipientId, member.id))).limit(1);
+  if (!recommendation) return Response.json({ error: "Recommendation not found." }, { status: 404 });
+  if (body.status) {
+    if (!statuses.includes(body.status as typeof statuses[number])) return Response.json({ error: "Choose a valid recommendation status." }, { status: 400 });
+    await db.update(recommendations).set({ status: body.status as typeof statuses[number], updatedAt: new Date() }).where(eq(recommendations.id, recommendation.id));
+  }
+  if (body.rating !== undefined) {
+    const rating = Number(body.rating);
+    if (recommendation.status !== "watched" && body.status !== "watched") return Response.json({ error: "Finish the title before rating the recommendation." }, { status: 400 });
+    if (!Number.isInteger(rating) || rating < 1 || rating > 5) return Response.json({ error: "Rate this recommendation from 1 to 5." }, { status: 400 });
+    await db.insert(recommendationRatings).values({ recommendationId: recommendation.id, score: rating }).onConflictDoUpdate({ target: recommendationRatings.recommendationId, set: { score: rating, updatedAt: new Date() } });
+  }
   return Response.json({ status: "updated" });
 }

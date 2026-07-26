@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { and, count, desc, eq } from "drizzle-orm";
 import { db } from "../../db";
-import { groupMembers, groupPickSaves, groupTitlePicks, groups, notifications, titles, users, userTitleStates } from "../../db/schema";
+import { groupMembers, groupPickReactions, groupPickSaves, groupTitlePicks, groups, notifications, titles, users, userTitleStates } from "../../db/schema";
 
 async function memberFor(clerkUserId: string) {
   if (!db) return null;
@@ -35,14 +35,17 @@ export async function GET(request: Request) {
     .innerJoin(users, eq(groupTitlePicks.addedBy, users.id))
     .where(eq(groupTitlePicks.groupId, groupId)).orderBy(desc(groupTitlePicks.createdAt)).limit(50);
   const hydrated = await Promise.all(picks.map(async pick => {
-    const [[saves], [viewerSave]] = await Promise.all([
+    const [[saves], [viewerSave], reactions] = await Promise.all([
       db!.select({ value: count() }).from(groupPickSaves).where(eq(groupPickSaves.groupPickId, pick.id)),
       db!.select({ id: groupPickSaves.id }).from(groupPickSaves).where(and(eq(groupPickSaves.groupPickId, pick.id), eq(groupPickSaves.userId, member.id))).limit(1),
+      db!.select({ emoji: groupPickReactions.emoji, userId: groupPickReactions.userId }).from(groupPickReactions).where(eq(groupPickReactions.groupPickId, pick.id)),
     ]);
+    const reactionCounts = reactions.reduce<Record<string, number>>((counts, reaction) => ({ ...counts, [reaction.emoji]: (counts[reaction.emoji] ?? 0) + 1 }), {});
+    const viewerReaction = reactions.find(reaction => reaction.userId === member.id)?.emoji ?? null;
     return {
       id: pick.id, titleId: pick.titleId, tmdbId: pick.tmdbId, title: pick.title, type: pick.type, year: pick.year, posterPath: pick.posterPath,
       addedBy: { id: pick.addedById, displayName: pick.addedByName, avatarUrl: pick.addedByAvatar },
-      savedCount: saves?.value ?? 0, savedByViewer: Boolean(viewerSave),
+      savedCount: saves?.value ?? 0, savedByViewer: Boolean(viewerSave), reactionCounts, viewerReaction,
     };
   }));
   return Response.json({ picks: hydrated });
@@ -54,7 +57,22 @@ export async function POST(request: Request) {
   if (!db) return Response.json({ error: "Shared picks are temporarily unavailable." }, { status: 503 });
   const member = await memberFor(userId);
   if (!member) return Response.json({ error: "Profile not found." }, { status: 404 });
-  const body = await request.json() as { action?: "save"; groupId?: string; pickId?: string; tmdbId?: number; type?: "movie" | "tv"; name?: string; year?: number | null; posterPath?: string | null };
+  const body = await request.json() as { action?: "save" | "react"; groupId?: string; pickId?: string; emoji?: string; tmdbId?: number; type?: "movie" | "tv"; name?: string; year?: number | null; posterPath?: string | null };
+  if (body.action === "react") {
+    const emoji = body.emoji;
+    if (!body.groupId || !body.pickId || !emoji || !["🍿", "🔥", "👀"].includes(emoji)) return Response.json({ error: "Choose a group reaction." }, { status: 400 });
+    const [membership] = await db.select({ groupId: groupMembers.groupId }).from(groupMembers).where(and(eq(groupMembers.groupId, body.groupId), eq(groupMembers.userId, member.id))).limit(1);
+    if (!membership) return Response.json({ error: "This group is not in your Circle." }, { status: 403 });
+    const [pick] = await db.select({ id: groupTitlePicks.id }).from(groupTitlePicks).where(and(eq(groupTitlePicks.id, body.pickId), eq(groupTitlePicks.groupId, body.groupId))).limit(1);
+    if (!pick) return Response.json({ error: "That shared pick is no longer available." }, { status: 404 });
+    const [existing] = await db.select({ id: groupPickReactions.id, emoji: groupPickReactions.emoji }).from(groupPickReactions).where(and(eq(groupPickReactions.groupPickId, pick.id), eq(groupPickReactions.userId, member.id))).limit(1);
+    if (existing?.emoji === emoji) await db.delete(groupPickReactions).where(eq(groupPickReactions.id, existing.id));
+    else if (existing) await db.update(groupPickReactions).set({ emoji, updatedAt: new Date() }).where(eq(groupPickReactions.id, existing.id));
+    else await db.insert(groupPickReactions).values({ groupPickId: pick.id, userId: member.id, emoji });
+    const reactions = await db.select({ emoji: groupPickReactions.emoji, userId: groupPickReactions.userId }).from(groupPickReactions).where(eq(groupPickReactions.groupPickId, pick.id));
+    const reactionCounts = reactions.reduce<Record<string, number>>((counts, reaction) => ({ ...counts, [reaction.emoji]: (counts[reaction.emoji] ?? 0) + 1 }), {});
+    return Response.json({ reactionCounts, viewerReaction: reactions.find(reaction => reaction.userId === member.id)?.emoji ?? null });
+  }
   if (body.action === "save") {
     if (!body.groupId || !body.pickId) return Response.json({ error: "Choose a shared pick." }, { status: 400 });
     const [membership] = await db.select({ groupId: groupMembers.groupId }).from(groupMembers).where(and(eq(groupMembers.groupId, body.groupId), eq(groupMembers.userId, member.id))).limit(1);

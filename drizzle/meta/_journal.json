@@ -92,6 +92,13 @@
       "when": 1785048256670,
       "tag": "0012_grey_monster_badoon",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1785093012198,
+      "tag": "0013_abandoned_thena",
+      "breakpoints": true
     }
   ]
 }
