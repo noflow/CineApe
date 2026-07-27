@@ -39,17 +39,19 @@ export async function POST(request: Request) {
   const token = process.env.TMDB_API_READ_ACCESS_TOKEN;
   if (!db || !token) return Response.json({ error: "Episode alerts are not configured." }, { status: 503 });
 
-  const tracked = await db.select({
+  const activeLibrary = await db.select({
     userId: userTitleStates.userId,
     titleId: userTitleStates.titleId,
     tmdbId: titles.tmdbId,
     title: titles.name,
+    type: titles.type,
     status: userTitleStates.status,
     currentSeason: userTitleStates.currentSeason,
     currentEpisode: userTitleStates.currentEpisode,
     updatedAt: userTitleStates.updatedAt,
   }).from(userTitleStates).innerJoin(titles, eq(userTitleStates.titleId, titles.id))
-    .where(and(inArray(userTitleStates.status, ["watching", "completed"]), eq(titles.type, "tv"))) as TrackedEntry[];
+    .where(inArray(userTitleStates.status, ["watching", "completed"]));
+  const tracked = activeLibrary.filter(entry => entry.type === "tv") as TrackedEntry[];
 
   const byShow = new Map<number, TrackedEntry[]>();
   for (const entry of tracked) byShow.set(entry.tmdbId, [...(byShow.get(entry.tmdbId) ?? []), entry]);
@@ -109,5 +111,20 @@ export async function POST(request: Request) {
     } catch { /* One unavailable TMDB title must not stop the daily alert run. */ }
   }
 
-  return Response.json({ checkedShows: byShow.size, alertsCreated, seriesReopened });
+  const trackedTitles = Array.from(byShow.values()).map(entries => ({
+    title: entries[0].title,
+    status: Array.from(new Set(entries.map(entry => entry.status))).join(", "),
+    trackedBy: entries.length,
+  }));
+  const ignoredEntries = activeLibrary
+    .filter(entry => entry.type !== "tv")
+    .map(entry => ({ title: entry.title, savedAs: entry.type, status: entry.status }));
+
+  return Response.json({
+    checkedShows: byShow.size,
+    eligibleEntries: tracked.length,
+    alertsCreated,
+    seriesReopened,
+    diagnostic: { trackedTitles, ignoredEntries },
+  });
 }
