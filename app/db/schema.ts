@@ -144,6 +144,48 @@ export const movieNightVotes = pgTable("movie_night_votes", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [primaryKey({ columns: [table.pollId, table.userId] })]);
 
+export const dateNights = pgTable("date_nights", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: movieNightStatus("status").default("open").notNull(),
+  ...timestamps,
+});
+
+export const dateNightMembers = pgTable("date_night_members", {
+  dateNightId: uuid("date_night_id").notNull().references(() => dateNights.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [primaryKey({ columns: [table.dateNightId, table.userId] })]);
+
+export const dateNightSlots = pgTable("date_night_slots", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  dateNightId: uuid("date_night_id").notNull().references(() => dateNights.id, { onDelete: "cascade" }),
+  day: text("day").notNull(),
+  ...timestamps,
+}, (table) => [uniqueIndex("date_night_slots_night_day_unique").on(table.dateNightId, table.day)]);
+
+export const dateNightSlotVotes = pgTable("date_night_slot_votes", {
+  dateNightId: uuid("date_night_id").notNull().references(() => dateNights.id, { onDelete: "cascade" }),
+  slotId: uuid("slot_id").notNull().references(() => dateNightSlots.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [primaryKey({ columns: [table.dateNightId, table.userId] })]);
+
+export const dateNightOptions = pgTable("date_night_options", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  dateNightId: uuid("date_night_id").notNull().references(() => dateNights.id, { onDelete: "cascade" }),
+  titleId: uuid("title_id").notNull().references(() => titles.id, { onDelete: "cascade" }),
+  ...timestamps,
+}, (table) => [uniqueIndex("date_night_options_night_title_unique").on(table.dateNightId, table.titleId)]);
+
+export const dateNightOptionVotes = pgTable("date_night_option_votes", {
+  dateNightId: uuid("date_night_id").notNull().references(() => dateNights.id, { onDelete: "cascade" }),
+  optionId: uuid("option_id").notNull().references(() => dateNightOptions.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [primaryKey({ columns: [table.dateNightId, table.userId] })]);
+
 export const recommendations = pgTable("recommendations", {
   id: uuid("id").defaultRandom().primaryKey(),
   titleId: uuid("title_id").notNull().references(() => titles.id, { onDelete: "cascade" }),
