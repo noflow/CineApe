@@ -1,6 +1,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../../db";
 import { notifications, titles, userTitleStates } from "../../../db/schema";
+import { runWatchlistReleaseAlerts } from "../release-alerts/route";
 
 const API_BASE = "https://api.themoviedb.org/3";
 const RECENT_AIRING_WINDOW_DAYS = 8;
@@ -120,11 +121,13 @@ export async function POST(request: Request) {
     .filter(entry => entry.type !== "tv")
     .map(entry => ({ title: entry.title, savedAs: entry.type, status: entry.status }));
 
+  const watchlistReleaseAlerts = await runWatchlistReleaseAlerts();
   return Response.json({
     checkedShows: byShow.size,
     eligibleEntries: tracked.length,
     alertsCreated,
     seriesReopened,
     diagnostic: { trackedTitles, ignoredEntries },
+    watchlistReleaseAlerts,
   });
 }
