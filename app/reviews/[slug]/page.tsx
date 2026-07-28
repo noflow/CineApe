@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { editorReviews, titles, users } from "../../db/schema";
 
@@ -13,8 +13,8 @@ async function getReview(slug: string) {
   const [review] = await db.select({
     headline: editorReviews.headline, body: editorReviews.body, score: editorReviews.score, seoTitle: editorReviews.seoTitle,
     seoDescription: editorReviews.seoDescription, publishedAt: editorReviews.publishedAt, title: titles.name, tmdbId: titles.tmdbId, year: titles.releaseYear,
-    type: titles.type, posterPath: titles.posterPath, author: users.displayName,
-  }).from(editorReviews).innerJoin(titles, eq(editorReviews.titleId, titles.id)).innerJoin(users, eq(editorReviews.authorId, users.id))
+    type: titles.type, posterPath: titles.posterPath, author: sql<string>`coalesce(${users.displayName}, 'CineApe Editor')`,
+  }).from(editorReviews).innerJoin(titles, eq(editorReviews.titleId, titles.id)).leftJoin(users, eq(editorReviews.authorId, users.id))
     .where(and(eq(editorReviews.slug, slug), eq(editorReviews.status, "published"))).limit(1);
   return review ?? null;
 }
