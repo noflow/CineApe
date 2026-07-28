@@ -88,6 +88,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tmdbId = Number(params.get("titleId"));
+    const type = params.get("titleType");
+    if (!Number.isInteger(tmdbId) || tmdbId < 1 || (type !== "movie" && type !== "tv")) return;
+    setSelectedTitle({ title: "Loading title…", meta: "", score: "—", tmdbId, type });
+    setPage("Title");
+    window.history.replaceState({}, "", "/");
+  }, []);
+
+  useEffect(() => {
     if (!navigationReady) return;
     sessionStorage.setItem("cineape-navigation-v1", JSON.stringify({ page, selectedTitle }));
   }, [navigationReady, page, selectedTitle]);
@@ -612,7 +622,11 @@ function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string,
   }, [filter, category]);
   const loadMore = async () => { if (loading || loadingMore || !hasMore) return; setLoadingMore(true); try { const data = await fetchTitles(nextPage); const more = data.titles ?? []; setTitles(current => { const existing = new Set(current.map(title => `${title.type}-${title.id}`)); return [...current, ...more.filter(title => !existing.has(`${title.type}-${title.id}`))]; }); setHasMore(Boolean(data.hasMore) && more.length > 0); setNextPage(current => current + 1); } catch { setHasMore(false); } finally { setLoadingMore(false); } };
   useEffect(() => { const node = sentinel.current; if (!node || !hasMore || loading) return; const observer = new IntersectionObserver(entries => { if (entries[0]?.isIntersecting) void loadMore(); }, { rootMargin: "420px" }); observer.observe(node); return () => observer.disconnect(); }, [hasMore, loading, loadingMore, nextPage, titles.length]);
-  const rememberAndOpen = (title: DiscoverTitle) => { onSnapshot({ filter, category, titles, nextPage, hasMore, scrollY: window.scrollY }); onOpen(title.title, `${title.year ?? "—"} · ${title.type === "tv" ? "TV series" : "Movie"}`, title.score, title.id, title.type); };
+  const rememberAndOpen = (title: DiscoverTitle) => {
+    onSnapshot({ filter, category, titles, nextPage, hasMore, scrollY: window.scrollY });
+    const slug = title.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    window.location.assign(`/${title.type}/${title.id}-${slug}`);
+  };
   const filters = [{ key: "all", label: "Popular now" }, { key: "movie", label: "Movies" }, { key: "tv", label: "TV shows" }] as const;
   const categories = filter === "movie" ? [
     { key: "all", label: "All movies" }, { key: "new", label: "New releases" }, { key: "past6months", label: "Past 6 months" }, { key: "pastyear", label: "Past year" }, { key: "upcoming", label: "Coming soon" },
