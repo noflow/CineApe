@@ -4,6 +4,7 @@ import { PwaRegister } from "./pwa-register";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://cineape.com"),
   title: "CineApe — Trusted movie recommendations",
   description: "Discover, share, and rate movie and TV recommendations with the people who know your taste.",
   manifest: "/manifest.webmanifest",
