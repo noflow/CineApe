@@ -120,6 +120,13 @@
       "when": 1785240000000,
       "tag": "0016_group_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1785243600000,
+      "tag": "0017_web_push",
+      "breakpoints": true
     }
   ]
 }

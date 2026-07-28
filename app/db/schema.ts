@@ -8,7 +8,7 @@ const timestamps = {
 export const titleType = pgEnum("title_type", ["movie", "tv"]);
 export const recommendationStatus = pgEnum("recommendation_status", ["pending", "watching", "watched", "not_interested"]);
 export const libraryStatus = pgEnum("library_status", ["watchlist", "watching", "completed"]);
-export const notificationKind = pgEnum("notification_kind", ["recommendation", "group_join", "streaming", "episode", "chat", "friend_request"]);
+export const notificationKind = pgEnum("notification_kind", ["recommendation", "group_join", "streaming", "episode", "release", "chat", "friend_request"]);
 export const friendRequestStatus = pgEnum("friend_request_status", ["pending", "accepted", "declined"]);
 export const editorialStatus = pgEnum("editorial_status", ["draft", "published"]);
 export const movieNightStatus = pgEnum("movie_night_status", ["open", "closed"]);
@@ -223,6 +223,29 @@ export const notifications = pgTable("notifications", {
   clearedAt: timestamp("cleared_at", { withTimezone: true }),
   ...timestamps,
 });
+
+// Browser push subscriptions are device-specific. A member can opt in on both
+// their phone and tablet without one subscription replacing the other.
+export const webPushSubscriptions = pgTable("web_push_subscriptions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull().unique(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  notifyMovies: boolean("notify_movies").default(true).notNull(),
+  notifyTv: boolean("notify_tv").default(true).notNull(),
+  ...timestamps,
+});
+
+// A release is marked once globally, preventing a daily job from repeatedly
+// sending the same title to every subscribed device.
+export const releaseAlertDispatches = pgTable("release_alert_dispatches", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tmdbId: integer("tmdb_id").notNull(),
+  type: titleType("type").notNull(),
+  releaseDate: text("release_date").notNull(),
+  ...timestamps,
+}, (table) => [uniqueIndex("release_alert_dispatches_unique").on(table.tmdbId, table.type, table.releaseDate)]);
 
 export const editorReviews = pgTable("editor_reviews", {
   id: uuid("id").defaultRandom().primaryKey(),
