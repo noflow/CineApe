@@ -71,6 +71,7 @@ export const invitations = pgTable("invitations", {
 export const groups = pgTable("groups", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
+  avatarUrl: text("avatar_url"),
   createdBy: uuid("created_by").notNull().references(() => users.id, { onDelete: "cascade" }),
   ...timestamps,
 });

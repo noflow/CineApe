@@ -627,7 +627,7 @@ function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string,
 }
 
 type CircleFriend = { id: string; displayName: string; avatarUrl: string | null; bio: string | null; unreadMessages?: boolean };
-type CircleGroup = { id: string; name: string; createdAt: string; memberCount: number; pickCount: number; isOwner: boolean };
+type CircleGroup = { id: string; name: string; avatarUrl?: string | null; createdAt: string; memberCount: number; pickCount: number; isOwner: boolean };
 
 function CirclePageLegacy({ onInvite }: { onInvite: () => void }) {
   const [friends, setFriends] = useState<CircleFriend[]>([]);
@@ -839,11 +839,11 @@ function CompactCirclePageV2({ onInvite, onOpen }: { onInvite: () => void; onOpe
     <section className="circle-section">
       <div className="section-title"><div><h2>Group chats <span>{groups.length ? `· ${groups.length}` : ""}</span></h2><p>Private places for conversation and shared picks.</p></div><button className="primary compact-create-group" onClick={() => { setCreating(true); setMessage(""); }}>+ Create group</button></div>
       {creating && <form className="panel group-creator" onSubmit={createGroup}><label>GROUP NAME<input value={groupName} onChange={event => setGroupName(event.target.value)} placeholder="Movie night crew" maxLength={60} autoFocus/></label><div><button type="button" className="secondary" onClick={() => { setCreating(false); setMessage(""); }}>Cancel</button><button className="primary" type="submit">Create group</button></div>{message && <small>{message}</small>}</form>}
-      {loading ? <div className="panel circle-loading">Loading your groups...</div> : groups.length ? <div className="group-grid live-group-grid">{groups.map((group, index) => <article className={`panel group live-group tone-${index % 3}`} key={group.id}><i>{index % 3 === 0 ? "✦" : index % 3 === 1 ? "⌂" : "◉"}</i><h3>{group.name}</h3><p>{group.memberCount} {group.memberCount === 1 ? "member" : "members"} · {group.pickCount} shared {group.pickCount === 1 ? "pick" : "picks"}</p><button className="group-open" onClick={() => setOpenGroup(group)}>Open group →</button>{group.isOwner && <button className="group-invite" onClick={() => setInvitingGroup(group)}>Invite a friend</button>}</article>)}</div> : !creating && <div className="panel circle-empty"><div><b>Create a home for your next watch.</b><p>Start a private group for your family, friend group, or recurring movie night.</p></div><button className="primary" onClick={() => setCreating(true)}>Create a group</button></div>}
+      {loading ? <div className="panel circle-loading">Loading your groups...</div> : groups.length ? <div className="group-grid live-group-grid sleek-group-grid">{groups.map((group, index) => <button className={`group-tile tone-${index % 3}`} key={group.id} onClick={() => setOpenGroup(group)} aria-label={`Open ${group.name}`}><span className="group-tile-avatar">{group.avatarUrl ? <img src={group.avatarUrl} alt="" /> : <span>{index % 3 === 0 ? "✦" : index % 3 === 1 ? "⌂" : "◉"}</span>}</span><span className="group-tile-copy"><b>{group.name}</b><small>{group.memberCount} {group.memberCount === 1 ? "member" : "members"}</small></span><span className="group-tile-arrow" aria-hidden="true">›</span></button>)}</div> : !creating && <div className="panel circle-empty"><div><b>Create a home for your next watch.</b><p>Start a private group for your family, friend group, or recurring movie night.</p></div><button className="primary" onClick={() => setCreating(true)}>Create a group</button></div>}
     </section>
     {selected && <FriendChatProfileModal friend={selected} onClose={() => setSelected(null)} onRead={() => setFriends(current => current.map(friend => friend.id === selected.id ? { ...friend, unreadMessages: false } : friend))}/>} 
     {invitingGroup && <GroupInviteModal group={invitingGroup} friends={friends} onClose={() => setInvitingGroup(null)} onInvited={() => { setInvitingGroup(null); load(); }} />}
-    {openGroup && <GroupSpaceModal group={openGroup} onClose={() => setOpenGroup(null)} onOpen={onOpen}/>} 
+    {openGroup && <GroupSpaceModalV2 group={openGroup} onClose={() => setOpenGroup(null)} onInvite={() => { setOpenGroup(null); setInvitingGroup(openGroup); }} onOpen={onOpen}/>} 
   </section>;
 }
 
@@ -1019,6 +1019,79 @@ function GroupSpaceModal({ group, onClose, onOpen }: { group: CircleGroup; onClo
   const reactToPick = async (pick: GroupSharedPick, emoji: string) => { const response = await fetch("/api/group-picks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "react", groupId: group.id, pickId: pick.id, emoji }) }); const data = await response.json() as { reactionCounts?: Record<string, number>; viewerReaction?: string | null }; if (response.ok) setPicks(current => current.map(item => item.id === pick.id ? { ...item, reactionCounts: data.reactionCounts ?? item.reactionCounts, viewerReaction: data.viewerReaction ?? null } : item)); };
   const visiblePicks = filter === "all" ? picks : picks.filter(pick => pick.type === filter); const newest = picks[0];
   return <div className="backdrop group-space-backdrop" onClick={onClose}><section className="modal group-space-modal" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button><header className="group-space-head"><div><p className="eyebrow">YOUR GROUP</p><h2>{group.name}</h2><span>{group.memberCount} {group.memberCount === 1 ? "member" : "members"} · Share picks and plan your next watch.</span>{newest && <p className="group-whats-new"><b>What’s new</b> {newest.addedBy.displayName} added {newest.title}</p>}</div></header><div className="group-space-grid"><section className="group-wall"><div className="group-space-section-head"><div><p className="eyebrow">GROUP WALL</p><h3>Talk it out</h3></div><span>Private to this group</span></div><div className="group-wall-messages">{loading ? <p>Loading the wall...</p> : messages.length ? messages.map(message => <article key={message.id} className={message.sender.id === viewerId ? "mine" : ""}>{message.sender.id !== viewerId && <Avatar imageUrl={message.sender.avatarUrl}>{message.sender.displayName.slice(0, 2).toUpperCase()}</Avatar>}<div><b>{message.sender.id === viewerId ? "You" : message.sender.displayName}</b><p>{message.body}</p><time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time></div></article>) : <p>Start the conversation. Make the next watch a group decision.</p>}</div><form className="group-wall-compose" onSubmit={send}><textarea value={draft} onChange={event => setDraft(event.target.value)} placeholder={`Message ${group.name}`} maxLength={2000}/><button className="primary" disabled={!draft.trim()}>Send</button></form></section><section className="group-picks"><div className="group-space-section-head"><div><p className="eyebrow">SHARED LIST</p><h3>Movies & TV shows</h3></div><span>{picks.length} {picks.length === 1 ? "pick" : "picks"}</span></div><div className="tabs group-pick-tabs"><button className={filter === "all" ? "chosen" : ""} onClick={() => setFilter("all")}>All</button><button className={filter === "movie" ? "chosen" : ""} onClick={() => setFilter("movie")}>Movies</button><button className={filter === "tv" ? "chosen" : ""} onClick={() => setFilter("tv")}>TV shows</button></div><div className="group-pick-list">{loading ? <p>Loading shared picks...</p> : visiblePicks.length ? visiblePicks.map(pick => <article key={pick.id}><button className="group-pick-title" onClick={() => { onClose(); onOpen(pick.title, `${pick.year ?? "—"} · ${pick.type === "tv" ? "TV series" : "Movie"}`, "—", pick.tmdbId, pick.type); }}>{pick.posterPath ? <img src={pick.posterPath} alt=""/> : <span>{pick.type === "tv" ? "TV" : "Movie"}</span>}<div><b>{pick.title}</b><small>{pick.type === "tv" ? "TV series" : "Movie"}{pick.year ? ` · ${pick.year}` : ""}</small><em>Added by {pick.addedBy.displayName} · {pick.savedCount} {pick.savedCount === 1 ? "save" : "saves"}</em><GroupPickReactions pick={pick} onReact={emoji => void reactToPick(pick, emoji)}/></div></button><button className={pick.savedByViewer ? "secondary saved-group-pick" : "small-primary"} disabled={Boolean(savingPick) || pick.savedByViewer} onClick={() => void savePick(pick)}>{savingPick === pick.id ? "Saving..." : pick.savedByViewer ? "In watchlist" : "Add to watchlist"}</button></article>) : <p>No shared picks yet. Add one from any title page with “Add to group list.”</p>}</div></section></div></section></div>;
+}
+
+function GroupSpaceModalV2({ group, onClose, onInvite, onOpen }: { group: CircleGroup; onClose: () => void; onInvite: () => void; onOpen: (title?: string, meta?: string, score?: string, tmdbId?: number, type?: "movie" | "tv") => void }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [picks, setPicks] = useState<GroupSharedPick[]>([]);
+  const [members, setMembers] = useState<CircleFriend[]>([]);
+  const [viewerId, setViewerId] = useState("");
+  const [draft, setDraft] = useState("");
+  const [filter, setFilter] = useState<"all" | "movie" | "tv">("all");
+  const [loading, setLoading] = useState(true);
+  const [savingPick, setSavingPick] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(group.avatarUrl ?? null);
+  const [avatarSaving, setAvatarSaving] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<CircleFriend | null>(null);
+
+  const load = async () => {
+    const [chatResponse, pickResponse, groupResponse] = await Promise.all([
+      fetch(`/api/chat?groupId=${encodeURIComponent(group.id)}`),
+      fetch(`/api/group-picks?groupId=${encodeURIComponent(group.id)}`),
+      fetch(`/api/circle?groupId=${encodeURIComponent(group.id)}`),
+    ]);
+    const chat = chatResponse.ok ? await chatResponse.json() as { viewerId?: string; messages?: ChatMessage[] } : null;
+    const pickData = pickResponse.ok ? await pickResponse.json() as { picks?: GroupSharedPick[] } : null;
+    const groupData = groupResponse.ok ? await groupResponse.json() as { group?: CircleGroup; members?: CircleFriend[] } : null;
+    setViewerId(chat?.viewerId ?? "");
+    setMessages(chat?.messages ?? []);
+    setPicks(pickData?.picks ?? []);
+    setMembers(groupData?.members ?? []);
+    setAvatarUrl(groupData?.group?.avatarUrl ?? group.avatarUrl ?? null);
+    setLoading(false);
+  };
+  useEffect(() => { void load(); const interval = window.setInterval(() => void load(), 12000); return () => window.clearInterval(interval); }, [group.id]);
+
+  const send = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!draft.trim()) return;
+    const response = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId: group.id, body: draft }) });
+    if (response.ok) { setDraft(""); await load(); }
+  };
+  const savePick = async (pick: GroupSharedPick) => {
+    if (savingPick || pick.savedByViewer) return;
+    setSavingPick(pick.id);
+    const response = await fetch("/api/group-picks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "save", groupId: group.id, pickId: pick.id }) });
+    const data = await response.json() as { savedCount?: number };
+    if (response.ok) setPicks(current => current.map(item => item.id === pick.id ? { ...item, savedByViewer: true, savedCount: data.savedCount ?? item.savedCount + 1 } : item));
+    setSavingPick(null);
+  };
+  const reactToPick = async (pick: GroupSharedPick, emoji: string) => {
+    const response = await fetch("/api/group-picks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "react", groupId: group.id, pickId: pick.id, emoji }) });
+    const data = await response.json() as { reactionCounts?: Record<string, number>; viewerReaction?: string | null };
+    if (response.ok) setPicks(current => current.map(item => item.id === pick.id ? { ...item, reactionCounts: data.reactionCounts ?? item.reactionCounts, viewerReaction: data.viewerReaction ?? null } : item));
+  };
+  const resizeAvatar = (file: File) => new Promise<string>((resolve, reject) => {
+    const image = new Image(); const source = URL.createObjectURL(file);
+    image.onload = () => { const size = 180; const canvas = document.createElement("canvas"); canvas.width = size; canvas.height = size; const context = canvas.getContext("2d"); if (!context) { reject(new Error("Image editing is unavailable.")); return; } const scale = Math.max(size / image.width, size / image.height); const width = image.width * scale; const height = image.height * scale; context.drawImage(image, (size - width) / 2, (size - height) / 2, width, height); URL.revokeObjectURL(source); resolve(canvas.toDataURL("image/webp", 0.82)); };
+    image.onerror = () => { URL.revokeObjectURL(source); reject(new Error("That image could not be used.")); };
+    image.src = source;
+  });
+  const changeAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]; event.target.value = "";
+    if (!file || avatarSaving) return;
+    setAvatarSaving(true);
+    try { const next = await resizeAvatar(file); const response = await fetch("/api/circle", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ groupId: group.id, avatarUrl: next }) }); if (response.ok) setAvatarUrl(next); } finally { setAvatarSaving(false); }
+  };
+  const visiblePicks = filter === "all" ? picks : picks.filter(pick => pick.type === filter);
+  const initials = (name: string) => name.split(" ").map(part => part[0]).join("").slice(0, 2).toUpperCase();
+
+  return <div className="backdrop group-space-backdrop" onClick={onClose}><section className="modal group-space-modal group-space-v2" onClick={event => event.stopPropagation()}><button className="close" onClick={onClose}>×</button>
+    <header className="group-space-head group-space-v2-head"><div className="group-brand"><label className={`group-avatar-editor ${group.isOwner ? "editable" : ""}`} title={group.isOwner ? "Change group image" : undefined}>{avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{group.name.slice(0, 1).toUpperCase()}</span>}{group.isOwner && <><em>{avatarSaving ? "…" : "Change"}</em><input type="file" accept="image/png,image/jpeg,image/webp" onChange={event => void changeAvatar(event)} /></>}</label><div><p className="eyebrow">YOUR GROUP</p><h2>{group.name}</h2><span>{members.length || group.memberCount} {members.length === 1 || group.memberCount === 1 ? "member" : "members"} · Private space for picks and conversation.</span></div></div>{group.isOwner && <button className="secondary group-head-invite" onClick={onInvite}>Invite friend</button>}</header>
+    <div className="group-member-strip"><span>Members</span><div>{members.map(member => <button key={member.id} onClick={() => setSelectedMember(member)} title={`Open ${member.displayName}'s profile`}><Avatar imageUrl={member.avatarUrl}>{initials(member.displayName)}</Avatar><b>{member.displayName}</b></button>)}</div></div>
+    <div className="group-space-grid"><section className="group-wall"><div className="group-space-section-head"><div><p className="eyebrow">GROUP WALL</p><h3>Talk it out</h3></div><span>Private to this group</span></div><div className="group-wall-messages">{loading ? <p>Loading the wall...</p> : messages.length ? messages.map(message => <article key={message.id} className={message.sender.id === viewerId ? "mine" : ""}>{message.sender.id !== viewerId && <Avatar imageUrl={message.sender.avatarUrl}>{initials(message.sender.displayName)}</Avatar>}<div><b>{message.sender.id === viewerId ? "You" : message.sender.displayName}</b><p>{message.body}</p><time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</time></div></article>) : <p>Start the conversation. Make the next watch a group decision.</p>}</div><form className="group-wall-compose" onSubmit={send}><textarea value={draft} onChange={event => setDraft(event.target.value)} placeholder={`Message ${group.name}`} maxLength={2000}/><button className="primary" disabled={!draft.trim()}>Send</button></form></section>
+      <section className="group-picks"><div className="group-space-section-head"><div><p className="eyebrow">SHARED LIST</p><h3>Movies & TV</h3></div><span>{picks.length} {picks.length === 1 ? "pick" : "picks"}</span></div><div className="tabs group-pick-tabs"><button className={filter === "all" ? "chosen" : ""} onClick={() => setFilter("all")}>All</button><button className={filter === "movie" ? "chosen" : ""} onClick={() => setFilter("movie")}>Movies</button><button className={filter === "tv" ? "chosen" : ""} onClick={() => setFilter("tv")}>TV</button></div><div className="group-pick-list">{loading ? <p>Loading shared picks...</p> : visiblePicks.length ? visiblePicks.map(pick => <article key={pick.id}><button className="group-pick-title" onClick={() => { onClose(); onOpen(pick.title, `${pick.year ?? "—"} · ${pick.type === "tv" ? "TV series" : "Movie"}`, "—", pick.tmdbId, pick.type); }}>{pick.posterPath ? <img src={pick.posterPath} alt=""/> : <span>{pick.type === "tv" ? "TV" : "Movie"}</span>}<div><b>{pick.title}</b><small>{pick.type === "tv" ? "TV series" : "Movie"}{pick.year ? ` · ${pick.year}` : ""}</small><em>Added by {pick.addedBy.displayName}</em><GroupPickReactions pick={pick} onReact={emoji => void reactToPick(pick, emoji)}/></div></button><button className={pick.savedByViewer ? "secondary saved-group-pick" : "small-primary"} disabled={Boolean(savingPick) || pick.savedByViewer} onClick={() => void savePick(pick)}>{savingPick === pick.id ? "Saving..." : pick.savedByViewer ? "Saved" : "Save"}</button></article>) : <p>No shared picks yet. Add one from any title page.</p>}</div></section></div>
+    {selectedMember && <FriendProfileModal friend={selectedMember} onClose={() => setSelectedMember(null)}/>}</section></div>;
 }
 
 type HomeRelease = { id: number; type: "movie" | "tv"; title: string; year: string | null; date?: string | null; image: string | null; score: string };

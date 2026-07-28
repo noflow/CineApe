@@ -9,7 +9,7 @@ async function memberFor(clerkUserId: string) {
   return member ?? null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) return Response.json({ error: "Sign in required." }, { status: 401 });
   if (!db) return Response.json({ friends: [], groups: [] });
@@ -25,7 +25,22 @@ export async function GET() {
     .where(and(eq(notifications.userId, member.id), eq(notifications.kind, "chat"), isNull(notifications.readAt), like(notifications.link, "chat:friend:%")));
   const unreadFriendIds = new Set(unreadChatRows.flatMap(row => row.link?.replace("chat:friend:", "") ?? []).filter(id => friendIds.includes(id)));
 
-  const memberGroups = await db.select({ id: groups.id, name: groups.name, createdAt: groups.createdAt, createdBy: groups.createdBy })
+  const groupId = new URL(request.url).searchParams.get("groupId");
+  if (groupId) {
+    const [group] = await db.select({ id: groups.id, name: groups.name, avatarUrl: groups.avatarUrl, createdAt: groups.createdAt, createdBy: groups.createdBy })
+      .from(groupMembers).innerJoin(groups, eq(groupMembers.groupId, groups.id))
+      .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, member.id))).limit(1);
+    if (!group) return Response.json({ error: "Group not found." }, { status: 404 });
+    const [memberCount, pickCount] = await Promise.all([
+      db.select({ value: count() }).from(groupMembers).where(eq(groupMembers.groupId, group.id)),
+      db.select({ value: count() }).from(groupTitlePicks).where(eq(groupTitlePicks.groupId, group.id)),
+    ]);
+    const members = await db.select({ id: users.id, displayName: users.displayName, avatarUrl: users.avatarUrl, bio: users.bio })
+      .from(groupMembers).innerJoin(users, eq(groupMembers.userId, users.id)).where(eq(groupMembers.groupId, group.id)).orderBy(users.displayName);
+    return Response.json({ group: { ...group, memberCount: memberCount[0]?.value ?? 0, pickCount: pickCount[0]?.value ?? 0, isOwner: group.createdBy === member.id }, members });
+  }
+
+  const memberGroups = await db.select({ id: groups.id, name: groups.name, avatarUrl: groups.avatarUrl, createdAt: groups.createdAt, createdBy: groups.createdBy })
     .from(groupMembers).innerJoin(groups, eq(groupMembers.groupId, groups.id))
     .where(eq(groupMembers.userId, member.id)).orderBy(desc(groups.createdAt));
   const groupCounts = await Promise.all(memberGroups.map(async group => {
@@ -48,7 +63,7 @@ export async function POST(request: Request) {
   const body = await request.json() as { name?: string };
   const name = body.name?.trim().slice(0, 60);
   if (!name || name.length < 2) return Response.json({ error: "Give your group a name with at least two characters." }, { status: 400 });
-  const [group] = await db.insert(groups).values({ name, createdBy: member.id }).returning({ id: groups.id, name: groups.name, createdAt: groups.createdAt });
+  const [group] = await db.insert(groups).values({ name, createdBy: member.id }).returning({ id: groups.id, name: groups.name, avatarUrl: groups.avatarUrl, createdAt: groups.createdAt });
   await db.insert(groupMembers).values({ groupId: group.id, userId: member.id });
   return Response.json({ group: { ...group, memberCount: 1, pickCount: 0, isOwner: true } }, { status: 201 });
 }
@@ -59,10 +74,17 @@ export async function PATCH(request: Request) {
   if (!db) return Response.json({ error: "Groups are temporarily unavailable." }, { status: 503 });
   const member = await memberFor(userId);
   if (!member) return Response.json({ error: "Profile not found." }, { status: 404 });
-  const body = await request.json() as { groupId?: string; friendId?: string };
-  if (!body.groupId || !body.friendId) return Response.json({ error: "Choose a group and friend." }, { status: 400 });
+  const body = await request.json() as { groupId?: string; friendId?: string; avatarUrl?: string | null };
+  if (!body.groupId) return Response.json({ error: "Choose a group." }, { status: 400 });
   const [group] = await db.select({ id: groups.id, name: groups.name }).from(groups).where(and(eq(groups.id, body.groupId), eq(groups.createdBy, member.id))).limit(1);
-  if (!group) return Response.json({ error: "Only the group owner can invite people." }, { status: 403 });
+  if (!group) return Response.json({ error: "Only the group owner can update this group." }, { status: 403 });
+  if (body.avatarUrl !== undefined) {
+    const avatarUrl = body.avatarUrl?.trim() || null;
+    if (avatarUrl && (avatarUrl.length > 70000 || !/^(data:image\/(png|jpeg|webp);base64,|https?:\/\/)/i.test(avatarUrl))) return Response.json({ error: "Choose a valid image for the group." }, { status: 400 });
+    await db.update(groups).set({ avatarUrl }).where(eq(groups.id, group.id));
+    return Response.json({ status: "updated", avatarUrl });
+  }
+  if (!body.friendId) return Response.json({ error: "Choose a friend." }, { status: 400 });
   const [friendship] = await db.select({ friendId: friendships.friendId }).from(friendships).where(and(eq(friendships.userId, member.id), eq(friendships.friendId, body.friendId))).limit(1);
   if (!friendship) return Response.json({ error: "You can only invite friends from your Circle." }, { status: 403 });
   const joined = await db.insert(groupMembers).values({ groupId: group.id, userId: body.friendId }).onConflictDoNothing().returning({ userId: groupMembers.userId });
