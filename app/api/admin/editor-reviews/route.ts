@@ -21,7 +21,7 @@ export async function GET() {
   const reviews = await db.select({
     id: editorReviews.id, slug: editorReviews.slug, headline: editorReviews.headline, body: editorReviews.body, score: editorReviews.score,
     seoTitle: editorReviews.seoTitle, seoDescription: editorReviews.seoDescription,
-    status: editorReviews.status, createdAt: editorReviews.createdAt, publishedAt: editorReviews.publishedAt,
+    status: editorReviews.status, createdAt: editorReviews.createdAt, publishedAt: editorReviews.publishedAt, scheduledAt: editorReviews.scheduledAt,
     tmdbId: titles.tmdbId, title: titles.name, type: titles.type, year: titles.releaseYear, posterPath: titles.posterPath,
     author: users.displayName,
   }).from(editorReviews).innerJoin(titles, eq(editorReviews.titleId, titles.id)).innerJoin(users, eq(editorReviews.authorId, users.id))
