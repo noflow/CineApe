@@ -120,6 +120,16 @@ export const chatMessages = pgTable("chat_messages", {
   ...timestamps,
 });
 
+// One compact reaction per person keeps group chats expressive without adding message clutter.
+export const chatMessageReactions = pgTable("chat_message_reactions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  messageId: uuid("message_id").notNull().references(() => chatMessages.id, { onDelete: "cascade" }),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  emoji: text("emoji").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [uniqueIndex("chat_message_reactions_message_user_unique").on(table.messageId, table.userId)]);
+
 export const movieNightPolls = pgTable("movie_night_polls", {
   id: uuid("id").defaultRandom().primaryKey(),
   groupId: uuid("group_id").notNull().references(() => groups.id, { onDelete: "cascade" }),

@@ -43,6 +43,10 @@ export async function GET(request: Request) {
   const memberGroups = await db.select({ id: groups.id, name: groups.name, avatarUrl: groups.avatarUrl, createdAt: groups.createdAt, createdBy: groups.createdBy })
     .from(groupMembers).innerJoin(groups, eq(groupMembers.groupId, groups.id))
     .where(eq(groupMembers.userId, member.id)).orderBy(desc(groups.createdAt));
+  const unreadGroupRows = await db.select({ link: notifications.link }).from(notifications)
+    .where(and(eq(notifications.userId, member.id), eq(notifications.kind, "chat"), isNull(notifications.readAt), like(notifications.link, "chat:group:%")));
+  const groupIds = new Set(memberGroups.map(group => group.id));
+  const unreadGroupIds = new Set(unreadGroupRows.flatMap(row => row.link?.replace("chat:group:", "") ?? []).filter(id => groupIds.has(id)));
   const groupCounts = await Promise.all(memberGroups.map(async group => {
     const [[members], [picks]] = await Promise.all([
       db!.select({ value: count() }).from(groupMembers).where(eq(groupMembers.groupId, group.id)),
@@ -51,7 +55,7 @@ export async function GET(request: Request) {
     return [group.id, { memberCount: members?.value ?? 0, pickCount: picks?.value ?? 0 }] as const;
   }));
   const countByGroup = new Map(groupCounts);
-  return Response.json({ friends: friends.map(friend => ({ ...friend, unreadMessages: unreadFriendIds.has(friend.id) })), groups: memberGroups.map(group => ({ ...group, ...countByGroup.get(group.id), isOwner: group.createdBy === member.id })) });
+  return Response.json({ friends: friends.map(friend => ({ ...friend, unreadMessages: unreadFriendIds.has(friend.id) })), groups: memberGroups.map(group => ({ ...group, ...countByGroup.get(group.id), isOwner: group.createdBy === member.id, unreadMessages: unreadGroupIds.has(group.id) })) });
 }
 
 export async function POST(request: Request) {

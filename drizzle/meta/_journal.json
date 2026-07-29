@@ -134,6 +134,13 @@
       "when": 1785330000000,
       "tag": "0018_editorial_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1785420000000,
+      "tag": "0019_chat_reactions",
+      "breakpoints": true
     }
   ]
 }
