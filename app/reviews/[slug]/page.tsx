@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { editorReviews, titles, users } from "../../db/schema";
+import { EditorialShare } from "../../editorial-share";
 
 type Props = { params: Promise<{ slug: string }> };
 export const dynamic = "force-dynamic";

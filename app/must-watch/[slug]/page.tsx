@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { db } from "../../db";
 import { editorListItems, editorLists, titles, users } from "../../db/schema";
+import { EditorialShare } from "../../editorial-share";
 
 type Props = { params: Promise<{ slug: string }> };
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ async function getList(slug: string) {
   const [list] = await db.select({ id: editorLists.id, name: editorLists.name, description: editorLists.description, seoTitle: editorLists.seoTitle, seoDescription: editorLists.seoDescription, publishedAt: editorLists.publishedAt, author: users.displayName })
     .from(editorLists).innerJoin(users, eq(editorLists.authorId, users.id)).where(and(eq(editorLists.slug, slug), eq(editorLists.status, "published"))).limit(1);
   if (!list) return null;
-  const items = await db.select({ name: titles.name, year: titles.releaseYear, type: titles.type, posterPath: titles.posterPath, position: editorListItems.position }).from(editorListItems).innerJoin(titles, eq(editorListItems.titleId, titles.id)).where(eq(editorListItems.listId, list.id)).orderBy(asc(editorListItems.position));
+  const items = await db.select({ tmdbId: titles.tmdbId, name: titles.name, year: titles.releaseYear, type: titles.type, posterPath: titles.posterPath, position: editorListItems.position }).from(editorListItems).innerJoin(titles, eq(editorListItems.titleId, titles.id)).where(eq(editorListItems.listId, list.id)).orderBy(asc(editorListItems.position));
   return { ...list, items };
 }
 
@@ -31,6 +32,7 @@ export default async function MustWatchListPage({ params }: Props) {
         <h1>{list.name}</h1>
         <span>{list.description}</span>
         <small className="editorial-list-byline">Curated by {list.author}{date ? ` · ${date}` : ""}</small>
+        <EditorialShare title="list" description={list.description} />
       </div>
       <section className="editorial-list-hero" aria-label={`${list.name} cover art`}>
         <div className="editorial-list-count"><b>{list.items.length}</b><span>{list.items.length === 1 ? "pick" : "picks"}<small>worth your time</small></span></div>
@@ -43,7 +45,7 @@ export default async function MustWatchListPage({ params }: Props) {
         <h2>A watchlist worth starting tonight.</h2>
         <ol>{list.items.map(item => <li key={`${item.position}-${item.name}`}>
           {item.posterPath ? <img src={item.posterPath} alt={`${item.name} poster`} /> : <i>{item.position}</i>}
-          <div><em>{String(item.position).padStart(2, "0")}</em><b>{item.name}</b><span>{item.type === "tv" ? "TV series" : "Movie"}{item.year ? ` · ${item.year}` : ""}</span></div>
+          <Link href={`/${item.type}/${item.tmdbId}-${item.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}><em>{String(item.position).padStart(2, "0")}</em><b>{item.name}</b><span>{item.type === "tv" ? "TV series" : "Movie"}{item.year ? ` · ${item.year}` : ""}</span></Link>
         </li>)}</ol>
       </section>
       <section className="editorial-about"><p>WHAT IS CINEAPE?</p><h2>Good picks hit different when they come from people who know you.</h2><span>CineApe is a free place to discover movies and shows, keep your watchlist organized, and share recommendations with friends and family.</span></section>
