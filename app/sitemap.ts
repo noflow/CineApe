@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, lte, or } from "drizzle-orm";
 import { db } from "./db";
 import { editorLists, editorReviews } from "./db/schema";
 
@@ -13,8 +13,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
   if (!db) return fixed;
   const [reviews, lists] = await Promise.all([
-    db.select({ slug: editorReviews.slug, updatedAt: editorReviews.updatedAt }).from(editorReviews).where(eq(editorReviews.status, "published")).orderBy(desc(editorReviews.publishedAt)).limit(500),
-    db.select({ slug: editorLists.slug, updatedAt: editorLists.updatedAt }).from(editorLists).where(eq(editorLists.status, "published")).orderBy(desc(editorLists.publishedAt)).limit(500),
+    db.select({ slug: editorReviews.slug, updatedAt: editorReviews.updatedAt }).from(editorReviews).where(and(eq(editorReviews.status, "published"), or(isNull(editorReviews.scheduledAt), lte(editorReviews.scheduledAt, new Date())))).orderBy(desc(editorReviews.publishedAt)).limit(500),
+    db.select({ slug: editorLists.slug, updatedAt: editorLists.updatedAt }).from(editorLists).where(and(eq(editorLists.status, "published"), or(isNull(editorLists.scheduledAt), lte(editorLists.scheduledAt, new Date())))).orderBy(desc(editorLists.publishedAt)).limit(500),
   ]);
   return [
     ...fixed,

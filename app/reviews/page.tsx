@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "CineApe Editor Reviews",
   description: "Official CineApe movie and TV reviews, written to help you choose what to watch next.",
+  alternates: { canonical: "/reviews" },
+  openGraph: { title: "CineApe Editor Reviews", description: "Official CineApe movie and TV reviews, written to help you choose what to watch next.", type: "website", url: "/reviews" },
 };
 
 async function ReviewsPageLegacy() {

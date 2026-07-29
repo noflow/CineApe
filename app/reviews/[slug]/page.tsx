@@ -5,6 +5,7 @@ import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { editorReviews, titles, users } from "../../db/schema";
 import { EditorialShare } from "../../editorial-share";
+import { EditorialStructuredData } from "../../editorial-structured-data";
 
 type Props = { params: Promise<{ slug: string }> };
 export const dynamic = "force-dynamic";
@@ -21,17 +22,22 @@ async function getReview(slug: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const review = await getReview((await params).slug);
+  const slug = (await params).slug;
+  const review = await getReview(slug);
   if (!review) return { title: "Review not found | CineApe" };
-  return { title: review.seoTitle || `${review.title} review | CineApe`, description: review.seoDescription || review.headline };
+  const title = review.seoTitle || `${review.title} review | CineApe`;
+  const description = review.seoDescription || review.headline;
+  const path = `/reviews/${slug}`;
+  return { title, description, alternates: { canonical: path }, openGraph: { title, description, type: "article", url: path, images: review.posterPath ? [{ url: review.posterPath, alt: `${review.title} poster` }] : [] }, twitter: { card: "summary_large_image", title, description, images: review.posterPath ? [review.posterPath] : [] } };
 }
 
 export default async function ReviewPage({ params }: Props) {
-  const review = await getReview((await params).slug);
+  const slug = (await params).slug;
+  const review = await getReview(slug);
   if (!review) notFound();
   const date = review.publishedAt ? new Date(review.publishedAt).toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" }) : "";
   const titleSlug = `${review.tmdbId}-${review.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
-  return <main className="editorial-public"><PublicHeader /><article className="editorial-review"><div className="editorial-title"><p>CINEAPE EDITOR REVIEW</p><h1>{review.title}</h1><span>{review.type === "tv" ? "TV series" : "Movie"}{review.year ? ` · ${review.year}` : ""}</span><Link className="editorial-title-link" href={`/${review.type}/${titleSlug}`}>View the CineApe title page →</Link><EditorialShare title="review" description={review.headline} /></div><div className="editorial-hero"><div className="editorial-score"><b>{review.score}</b><span>/10</span><small>CineApe score</small></div>{review.posterPath && <img src={review.posterPath} alt={`${review.title} poster`} />}</div><section className="editorial-copy"><p className="editorial-kicker">THE VERDICT</p><h2>{review.headline}</h2>{review.body.split(/\n{2,}/).map((paragraph, index) => <p key={index}>{paragraph}</p>)}<footer>Written by {review.author}{date ? ` · ${date}` : ""}</footer></section><section className="editorial-about"><p>WHAT IS CINEAPE?</p><h2>Good picks hit different when they come from people who know you.</h2><span>CineApe is a free place to discover movies and shows, keep your watchlist organized, and share recommendations with friends and family.</span></section><section className="editorial-join"><div><p>MAKE YOUR NEXT WATCH A GOOD ONE</p><h2>Find something worth watching—then share it with your Circle.</h2><span>Join CineApe free to save picks, track what you watch, and trade recommendations with your people.</span></div><Link href="/" className="editorial-join-button">Join CineApe free →</Link></section></article><TmdbCredit /></main>;
+  return <main className="editorial-public"><PublicHeader /><EditorialStructuredData kind="review" name={review.title} description={review.headline} path={`/reviews/${slug}`} publishedAt={review.publishedAt} image={review.posterPath} /><article className="editorial-review"><div className="editorial-title"><p>CINEAPE EDITOR REVIEW</p><h1>{review.title}</h1><span>{review.type === "tv" ? "TV series" : "Movie"}{review.year ? ` · ${review.year}` : ""}</span><Link className="editorial-title-link" href={`/${review.type}/${titleSlug}`}>View the CineApe title page →</Link><EditorialShare title="review" description={review.headline} /></div><div className="editorial-hero"><div className="editorial-score"><b>{review.score}</b><span>/10</span><small>CineApe score</small></div>{review.posterPath && <img src={review.posterPath} alt={`${review.title} poster`} />}</div><section className="editorial-copy"><p className="editorial-kicker">THE VERDICT</p><h2>{review.headline}</h2>{review.body.split(/\n{2,}/).map((paragraph, index) => <p key={index}>{paragraph}</p>)}<footer>Written by {review.author}{date ? ` · ${date}` : ""}</footer></section><section className="editorial-about"><p>WHAT IS CINEAPE?</p><h2>Good picks hit different when they come from people who know you.</h2><span>CineApe is a free place to discover movies and shows, keep your watchlist organized, and share recommendations with friends and family.</span></section><section className="editorial-join"><div><p>MAKE YOUR NEXT WATCH A GOOD ONE</p><h2>Find something worth watching—then share it with your Circle.</h2><span>Join CineApe free to save picks, track what you watch, and trade recommendations with your people.</span></div><Link href="/" className="editorial-join-button">Join CineApe free →</Link></section></article><TmdbCredit /></main>;
 }
 
 function PublicHeader() { return <header className="editorial-header"><Link href="/" className="editorial-logo editorial-review-logo" aria-label="CineApe home"><img src="/cineape-mobile-logo.png?v=3" alt="CineApe"/></Link><nav><Link href="/reviews">Reviews</Link><Link href="/must-watch">Must watch</Link><Link href="/">Find your next pick</Link><Link href="/" className="editorial-header-join">Join free</Link></nav></header>; }

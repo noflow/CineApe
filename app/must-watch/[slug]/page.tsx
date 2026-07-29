@@ -5,6 +5,7 @@ import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 import { db } from "../../db";
 import { editorListItems, editorLists, titles, users } from "../../db/schema";
 import { EditorialShare } from "../../editorial-share";
+import { EditorialStructuredData } from "../../editorial-structured-data";
 
 type Props = { params: Promise<{ slug: string }> };
 export const dynamic = "force-dynamic";
@@ -18,14 +19,16 @@ async function getList(slug: string) {
   return { ...list, items };
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> { const list = await getList((await params).slug); return list ? { title: list.seoTitle || `${list.name} | CineApe`, description: list.seoDescription || list.description } : { title: "List not found | CineApe" }; }
+export async function generateMetadata({ params }: Props): Promise<Metadata> { const slug = (await params).slug; const list = await getList(slug); if (!list) return { title: "List not found | CineApe" }; const title = list.seoTitle || `${list.name} | CineApe`; const description = list.seoDescription || list.description; const image = list.items.find(item => item.posterPath)?.posterPath; const path = `/must-watch/${slug}`; return { title, description, alternates: { canonical: path }, openGraph: { title, description, type: "article", url: path, images: image ? [{ url: image, alt: `${list.name} cover` }] : [] }, twitter: { card: "summary_large_image", title, description, images: image ? [image] : [] } }; }
 
 export default async function MustWatchListPage({ params }: Props) {
-  const list = await getList((await params).slug); if (!list) notFound();
+  const slug = (await params).slug;
+  const list = await getList(slug); if (!list) notFound();
   const date = list.publishedAt ? new Date(list.publishedAt).toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" }) : "";
   const covers = list.items.slice(0, 3);
   return <main className="editorial-public">
     <PublicHeader />
+    <EditorialStructuredData kind="list" name={list.name} description={list.description} path={`/must-watch/${slug}`} publishedAt={list.publishedAt} image={covers[0]?.posterPath} />
     <article className="editorial-review editorial-list-page">
       <div className="editorial-title">
         <p>CINEAPE EDITORIAL LIST</p>

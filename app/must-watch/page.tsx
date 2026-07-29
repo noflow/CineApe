@@ -6,7 +6,7 @@ import { db } from "../db";
 import { editorListItems, editorLists, titles, users } from "../db/schema";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "CineApe Must Watch Lists", description: "CineApe editor picks for your next movie night." };
+export const metadata: Metadata = { title: "CineApe Must Watch Lists", description: "CineApe editor picks for your next movie night.", alternates: { canonical: "/must-watch" }, openGraph: { title: "CineApe Must Watch Lists", description: "CineApe editor picks for your next movie night.", type: "website", url: "/must-watch" } };
 
 async function MustWatchPageLegacy() {
   const lists = db ? await db.select({ slug: editorLists.slug, name: editorLists.name, description: editorLists.description, publishedAt: editorLists.publishedAt, author: users.displayName })
