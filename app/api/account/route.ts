@@ -1,7 +1,7 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { db } from "../../db";
-import { friendships, notifications, recommendations, titleRatings, users } from "../../db/schema";
+import { chatMessages, friendships, groupTitlePicks, notifications, recommendations, titleRatings, userTitleStates, users } from "../../db/schema";
 
 async function currentMember() {
   const { userId } = await auth();
@@ -47,12 +47,22 @@ export async function GET() {
   if (!db) return Response.json({ error: "Database is unavailable." }, { status: 503 });
   const member = await currentMember();
   if (!member) return Response.json({ error: "Profile not found." }, { status: 404 });
-  const [[friends], [ratings], [sent]] = await Promise.all([
+  const [[friends], [ratings], [sent], [messages], [curated], [completed]] = await Promise.all([
     db.select({ value: count() }).from(friendships).where(eq(friendships.userId, member.id)),
     db.select({ value: count() }).from(titleRatings).where(eq(titleRatings.userId, member.id)),
     db.select({ value: count() }).from(recommendations).where(eq(recommendations.senderId, member.id)),
+    db.select({ value: count() }).from(chatMessages).where(eq(chatMessages.senderId, member.id)),
+    db.select({ value: count() }).from(groupTitlePicks).where(eq(groupTitlePicks.addedBy, member.id)),
+    db.select({ value: count() }).from(userTitleStates).where(and(eq(userTitleStates.userId, member.id), eq(userTitleStates.status, "completed"))),
   ]);
-  return Response.json({ profile: { displayName: member.displayName, username: member.username, avatarUrl: member.avatarUrl, bio: member.bio, friendListVisible: member.friendListVisible }, stats: { friends: friends?.value ?? 0, ratings: ratings?.value ?? 0, sent: sent?.value ?? 0 } });
+  const achievementSource = [
+    { id: "first-take", icon: "✦", name: "First Take", description: "Publish your first rating", value: ratings?.value ?? 0, target: 1 },
+    { id: "circle-builder", icon: "♧", name: "Circle Builder", description: "Connect with 3 friends", value: friends?.value ?? 0, target: 3 },
+    { id: "conversation-starter", icon: "✉", name: "Conversation Starter", description: "Send 25 chat messages", value: messages?.value ?? 0, target: 25 },
+    { id: "curator", icon: "☷", name: "The Curator", description: "Add 25 titles to group lists", value: curated?.value ?? 0, target: 25 },
+    { id: "marathoner", icon: "✓", name: "Marathoner", description: "Complete 50 movies or shows", value: completed?.value ?? 0, target: 50 },
+  ].map(item => ({ ...item, earned: item.value >= item.target, progress: Math.min(item.value, item.target) }));
+  return Response.json({ profile: { displayName: member.displayName, username: member.username, avatarUrl: member.avatarUrl, bio: member.bio, friendListVisible: member.friendListVisible }, stats: { friends: friends?.value ?? 0, ratings: ratings?.value ?? 0, sent: sent?.value ?? 0 }, achievements: achievementSource });
 }
 
 export async function PATCH(request: Request) {
