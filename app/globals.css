@@ -352,6 +352,16 @@
 .group-space-v2 .group-pick-reactions{margin-top:3px}
 @media(max-width:760px){.compact-circle .sleek-group-grid{grid-template-columns:1fr}.group-space-v2-head{align-items:flex-start!important;padding-right:39px!important}.group-brand{align-items:flex-start}.group-avatar-editor{width:52px;height:52px;border-radius:16px;font-size:20px}.group-head-invite{padding:8px 10px;font-size:10px}.group-member-strip{margin:13px 0 14px;align-items:flex-start}.group-member-strip>div{max-width:100%}.group-space-v2 .group-space-grid{grid-template-columns:1fr}.group-space-v2 .group-wall{min-height:400px}.group-space-v2 .group-pick-list{max-height:none}.group-member-strip button b{max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 
+/* The group room is a self-contained workspace: conversations and picks scroll inside it, never behind it. */
+.group-space-modal.group-space-v2{display:flex;flex-direction:column;height:min(760px,calc(100dvh - 28px));max-height:calc(100dvh - 28px);overflow:hidden}
+.group-space-v2 .group-space-grid{flex:1;min-height:0}
+.group-space-v2 .group-wall,.group-space-v2 .group-picks{min-height:0;height:100%}
+.group-space-v2 .group-wall{min-height:0}
+.group-space-v2 .group-wall-messages{min-height:0;max-height:none}
+.group-space-v2 .group-picks{display:flex;flex-direction:column}
+.group-space-v2 .group-pick-list{min-height:0;max-height:none;flex:1}
+@media(max-width:760px){.group-space-modal.group-space-v2{height:calc(100dvh - 16px);max-height:calc(100dvh - 16px)}.group-space-v2 .group-space-grid{grid-template-rows:minmax(0,1fr) minmax(145px,.5fr)}.group-space-v2 .group-wall{min-height:0}.group-space-v2 .group-pick-list{max-height:none}}
+
 /* Opt-in phone and tablet release alerts live alongside the member profile. */
 .push-alert-card{display:flex;flex-direction:column;align-items:flex-start;gap:10px}.push-alert-card>p{margin:0}.push-alert-card label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:750;color:var(--ink);cursor:pointer}.push-alert-card input{accent-color:var(--purple);width:16px;height:16px}.push-alert-card button{margin-top:3px}.push-alert-card small{color:var(--muted);font-size:11px;line-height:1.45}.push-alert-card .push-alert-message{color:#6251ad;font-weight:700}
 .editorial-title-link{display:inline-block;margin-top:12px;color:#684df0;font-size:12px;font-weight:850;text-decoration:none}.editorial-title-link:hover{text-decoration:underline}
