@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 async function getList(slug: string) {
   if (!db) return null;
-  const [list] = await db.select({ id: editorLists.id, name: editorLists.name, description: editorLists.description, seoTitle: editorLists.seoTitle, seoDescription: editorLists.seoDescription, author: users.displayName })
+  const [list] = await db.select({ id: editorLists.id, name: editorLists.name, description: editorLists.description, seoTitle: editorLists.seoTitle, seoDescription: editorLists.seoDescription, publishedAt: editorLists.publishedAt, author: users.displayName })
     .from(editorLists).innerJoin(users, eq(editorLists.authorId, users.id)).where(and(eq(editorLists.slug, slug), eq(editorLists.status, "published"))).limit(1);
   if (!list) return null;
   const items = await db.select({ name: titles.name, year: titles.releaseYear, type: titles.type, posterPath: titles.posterPath, position: editorListItems.position }).from(editorListItems).innerJoin(titles, eq(editorListItems.titleId, titles.id)).where(eq(editorListItems.listId, list.id)).orderBy(asc(editorListItems.position));
@@ -21,5 +21,37 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> { c
 
 export default async function MustWatchListPage({ params }: Props) {
   const list = await getList((await params).slug); if (!list) notFound();
-  return <main className="editorial-public"><header className="editorial-header"><Link href="/">CineApe</Link><nav><Link href="/must-watch">Must watch</Link><Link href="/">Find your next pick</Link></nav></header><section className="must-watch-detail"><p>CINEAPE EDITORIAL LIST</p><h1>{list.name}</h1><span>{list.description}</span><small>Curated by {list.author}</small><ol>{list.items.map(item => <li key={`${item.position}-${item.name}`}>{item.posterPath ? <img src={item.posterPath} alt="" /> : <i>{item.position}</i>}<div><b>{item.name}</b><span>{item.type === "tv" ? "TV series" : "Movie"}{item.year ? ` · ${item.year}` : ""}</span></div><em>{String(item.position).padStart(2, "0")}</em></li>)}</ol></section><footer className="editorial-tmdb">This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</footer></main>;
+  const date = list.publishedAt ? new Date(list.publishedAt).toLocaleDateString("en-CA", { month: "long", day: "numeric", year: "numeric" }) : "";
+  const covers = list.items.slice(0, 3);
+  return <main className="editorial-public">
+    <PublicHeader />
+    <article className="editorial-review editorial-list-page">
+      <div className="editorial-title">
+        <p>CINEAPE EDITORIAL LIST</p>
+        <h1>{list.name}</h1>
+        <span>{list.description}</span>
+        <small className="editorial-list-byline">Curated by {list.author}{date ? ` · ${date}` : ""}</small>
+      </div>
+      <section className="editorial-list-hero" aria-label={`${list.name} cover art`}>
+        <div className="editorial-list-count"><b>{list.items.length}</b><span>{list.items.length === 1 ? "pick" : "picks"}<small>worth your time</small></span></div>
+        <div className="editorial-list-covers">
+          {covers.map((item, index) => item.posterPath ? <img className={`editorial-list-cover editorial-list-cover-${index}`} src={item.posterPath} alt={`${item.name} poster`} key={`${item.position}-${item.name}`} /> : <span className={`editorial-list-cover editorial-list-cover-${index}`} key={`${item.position}-${item.name}`}>{item.name}</span>)}
+        </div>
+      </section>
+      <section className="editorial-copy editorial-list-copy">
+        <p className="editorial-kicker">THE LINEUP</p>
+        <h2>A watchlist worth starting tonight.</h2>
+        <ol>{list.items.map(item => <li key={`${item.position}-${item.name}`}>
+          {item.posterPath ? <img src={item.posterPath} alt={`${item.name} poster`} /> : <i>{item.position}</i>}
+          <div><em>{String(item.position).padStart(2, "0")}</em><b>{item.name}</b><span>{item.type === "tv" ? "TV series" : "Movie"}{item.year ? ` · ${item.year}` : ""}</span></div>
+        </li>)}</ol>
+      </section>
+      <section className="editorial-about"><p>WHAT IS CINEAPE?</p><h2>Good picks hit different when they come from people who know you.</h2><span>CineApe is a free place to discover movies and shows, keep your watchlist organized, and share recommendations with friends and family.</span></section>
+      <section className="editorial-join"><div><p>MAKE YOUR NEXT WATCH A GOOD ONE</p><h2>Find something worth watching—then share it with your Circle.</h2><span>Join CineApe free to save picks, track what you watch, and trade recommendations with your people.</span></div><Link href="/" className="editorial-join-button">Join CineApe free →</Link></section>
+    </article>
+    <TmdbCredit />
+  </main>;
 }
+
+function PublicHeader() { return <header className="editorial-header"><Link href="/" className="editorial-logo editorial-review-logo" aria-label="CineApe home"><img src="/cineape-mobile-logo.png?v=3" alt="CineApe" /></Link><nav><Link href="/reviews">Reviews</Link><Link className="active" href="/must-watch">Must watch</Link><Link href="/">Find your next pick</Link><Link href="/" className="editorial-header-join">Join free</Link></nav></header>; }
+function TmdbCredit() { return <footer className="editorial-tmdb">This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</footer>; }
