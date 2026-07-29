@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 import { db } from "../../db";
 import { editorListItems, editorLists, titles, users } from "../../db/schema";
 import { EditorialShare } from "../../editorial-share";
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 async function getList(slug: string) {
   if (!db) return null;
   const [list] = await db.select({ id: editorLists.id, name: editorLists.name, description: editorLists.description, seoTitle: editorLists.seoTitle, seoDescription: editorLists.seoDescription, publishedAt: editorLists.publishedAt, author: users.displayName })
-    .from(editorLists).innerJoin(users, eq(editorLists.authorId, users.id)).where(and(eq(editorLists.slug, slug), eq(editorLists.status, "published"))).limit(1);
+    .from(editorLists).innerJoin(users, eq(editorLists.authorId, users.id)).where(and(eq(editorLists.slug, slug), eq(editorLists.status, "published"), or(isNull(editorLists.scheduledAt), lte(editorLists.scheduledAt, new Date())))).limit(1);
   if (!list) return null;
   const items = await db.select({ tmdbId: titles.tmdbId, name: titles.name, year: titles.releaseYear, type: titles.type, posterPath: titles.posterPath, position: editorListItems.position }).from(editorListItems).innerJoin(titles, eq(editorListItems.titleId, titles.id)).where(eq(editorListItems.listId, list.id)).orderBy(asc(editorListItems.position));
   return { ...list, items };

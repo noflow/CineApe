@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars, react/no-unescaped-entities */
 import type { Metadata } from "next";
 import Link from "next/link";
-import { asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, lte, or } from "drizzle-orm";
 import { db } from "../db";
 import { editorListItems, editorLists, titles, users } from "../db/schema";
 
@@ -10,13 +10,13 @@ export const metadata: Metadata = { title: "CineApe Must Watch Lists", descripti
 
 async function MustWatchPageLegacy() {
   const lists = db ? await db.select({ slug: editorLists.slug, name: editorLists.name, description: editorLists.description, publishedAt: editorLists.publishedAt, author: users.displayName })
-    .from(editorLists).innerJoin(users, eq(editorLists.authorId, users.id)).where(eq(editorLists.status, "published")).orderBy(desc(editorLists.publishedAt)).limit(48) : [];
+    .from(editorLists).innerJoin(users, eq(editorLists.authorId, users.id)).where(and(eq(editorLists.status, "published"), or(isNull(editorLists.scheduledAt), lte(editorLists.scheduledAt, new Date())))).orderBy(desc(editorLists.publishedAt)).limit(48) : [];
   return <main className="editorial-public"><header className="editorial-header"><Link href="/">CineApe</Link><nav><Link href="/reviews">Reviews</Link><Link href="/">Find your next pick</Link></nav></header><section className="must-watch-index"><p>CINEAPE EDITORIAL</p><h1>Must watch, according to CineApe.</h1><span>Hand-picked movies and shows for your next great watch.</span>{lists.length ? <div className="must-watch-grid">{lists.map(list => <Link href={`/must-watch/${list.slug}`} key={list.slug}><p>EDITOR'S LIST</p><h2>{list.name}</h2><span>{list.description}</span><small>By {list.author}</small></Link>)}</div> : <div className="must-watch-empty">Our first must-watch list is on its way. Check back soon.</div>}</section><footer className="editorial-tmdb">This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</footer></main>;
 }
 
 export default async function MustWatchPage() {
   const lists = db ? await db.select({ id: editorLists.id, slug: editorLists.slug, name: editorLists.name, description: editorLists.description, publishedAt: editorLists.publishedAt, author: users.displayName })
-    .from(editorLists).innerJoin(users, eq(editorLists.authorId, users.id)).where(eq(editorLists.status, "published")).orderBy(desc(editorLists.publishedAt)).limit(48) : [];
+    .from(editorLists).innerJoin(users, eq(editorLists.authorId, users.id)).where(and(eq(editorLists.status, "published"), or(isNull(editorLists.scheduledAt), lte(editorLists.scheduledAt, new Date())))).orderBy(desc(editorLists.publishedAt)).limit(48) : [];
   const rows = lists.length && db ? await db.select({ listId: editorListItems.listId, name: titles.name, posterPath: titles.posterPath, position: editorListItems.position }).from(editorListItems).innerJoin(titles, eq(editorListItems.titleId, titles.id)).where(inArray(editorListItems.listId, lists.map(list => list.id))).orderBy(asc(editorListItems.position)) : [];
   const covers = new Map<string, typeof rows>();
   for (const row of rows) covers.set(row.listId, [...(covers.get(row.listId) ?? []), row]);
