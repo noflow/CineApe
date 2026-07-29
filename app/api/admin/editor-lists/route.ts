@@ -23,15 +23,16 @@ async function adminMember() {
 
 export async function GET() {
   if (!db) return Response.json({ error: "Studio is temporarily unavailable." }, { status: 503 });
-  if (!await adminMember()) return Response.json({ error: "Studio access required." }, { status: 403 });
-  const lists = await db.select({ id: editorLists.id, name: editorLists.name, description: editorLists.description, slug: editorLists.slug, status: editorLists.status, seoTitle: editorLists.seoTitle, seoDescription: editorLists.seoDescription, createdAt: editorLists.createdAt, publishedAt: editorLists.publishedAt })
+  const member = await adminMember();
+  if (!member) return Response.json({ error: "Studio access required." }, { status: 403 });
+  const lists = await db.select({ id: editorLists.id, authorId: editorLists.authorId, name: editorLists.name, description: editorLists.description, slug: editorLists.slug, status: editorLists.status, seoTitle: editorLists.seoTitle, seoDescription: editorLists.seoDescription, createdAt: editorLists.createdAt, publishedAt: editorLists.publishedAt })
     .from(editorLists).orderBy(desc(editorLists.createdAt)).limit(100);
   const listItems = lists.length ? await db.select({ listId: editorListItems.listId, tmdbId: titles.tmdbId, type: titles.type, name: titles.name, year: titles.releaseYear, posterPath: titles.posterPath, position: editorListItems.position })
     .from(editorListItems).innerJoin(titles, eq(editorListItems.titleId, titles.id))
     .where(inArray(editorListItems.listId, lists.map(list => list.id))).orderBy(asc(editorListItems.position)) : [];
   const itemsByList = new Map<string, typeof listItems>();
   for (const item of listItems) itemsByList.set(item.listId, [...(itemsByList.get(item.listId) ?? []), item]);
-  return Response.json({ lists: lists.map(list => ({ ...list, items: itemsByList.get(list.id) ?? [] })) }, { headers: { "Cache-Control": "no-store" } });
+  return Response.json({ lists: lists.map(({ authorId, ...list }) => ({ ...list, canEdit: authorId === member.id, items: itemsByList.get(list.id) ?? [] })) }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
