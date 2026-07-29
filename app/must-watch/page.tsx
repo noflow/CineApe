@@ -59,6 +59,6 @@ export default async function MustWatchPage() {
   </main>;
 }
 
-function EditorialHeader() { return <header className="editorial-header"><Link href="/" className="editorial-logo" aria-label="CineApe home"><img src="/cineape-logo-dark.png" alt="CineApe" /></Link><nav><Link href="/reviews">Reviews</Link><Link className="active" href="/must-watch">Must watch</Link><Link href="/">Find your next pick</Link><Link href="/" className="editorial-header-join">Join free</Link></nav></header>; }
+function EditorialHeader() { return <header className="editorial-header"><Link href="/" className="editorial-logo editorial-review-logo" aria-label="CineApe home"><img src="/cineape-mobile-logo.png?v=3" alt="CineApe" /></Link><nav><Link href="/reviews">Reviews</Link><Link className="active" href="/must-watch">Must watch</Link><Link href="/">Find your next pick</Link><Link href="/" className="editorial-header-join">Join free</Link></nav></header>; }
 function EditorialEmpty() { return <div className="must-watch-empty"><b>Our first must-watch list is on its way.</b><span>Check back soon for a fresh CineApe shortlist.</span></div>; }
 function EditorialCredit() { return <footer className="editorial-tmdb">This product uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB.</footer>; }
