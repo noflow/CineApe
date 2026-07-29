@@ -10,7 +10,7 @@ export const recommendationStatus = pgEnum("recommendation_status", ["pending", 
 export const libraryStatus = pgEnum("library_status", ["watchlist", "watching", "completed"]);
 export const notificationKind = pgEnum("notification_kind", ["recommendation", "group_join", "streaming", "episode", "release", "chat", "friend_request"]);
 export const friendRequestStatus = pgEnum("friend_request_status", ["pending", "accepted", "declined"]);
-export const editorialStatus = pgEnum("editorial_status", ["draft", "published"]);
+export const editorialStatus = pgEnum("editorial_status", ["draft", "published", "archived"]);
 export const movieNightStatus = pgEnum("movie_night_status", ["open", "closed"]);
 
 export const users = pgTable("users", {
@@ -259,6 +259,7 @@ export const editorReviews = pgTable("editor_reviews", {
   seoDescription: text("seo_description"),
   status: editorialStatus("status").default("draft").notNull(),
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   ...timestamps,
 });
 
@@ -272,6 +273,7 @@ export const editorLists = pgTable("editor_lists", {
   seoDescription: text("seo_description"),
   status: editorialStatus("status").default("draft").notNull(),
   publishedAt: timestamp("published_at", { withTimezone: true }),
+  scheduledAt: timestamp("scheduled_at", { withTimezone: true }),
   ...timestamps,
 });
 
