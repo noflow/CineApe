@@ -651,11 +651,14 @@ function DiscoverPageWithPaginationLegacy({ onOpen }: { onOpen: (title?: string,
   return <section className="page live-discover"><Intro label="DISCOVER" title="Find your next obsession." text={subtitle} action={null}/><div className="tabs discover-tabs">{filters.map(item => <button key={item.key} className={filter === item.key ? "chosen" : ""} onClick={() => { setFilter(item.key); setCategory("all"); }}>{item.label}</button>)}</div>{filter !== "all" && <div className="genre-chips" aria-label={`${filter === "movie" ? "Movie" : "TV show"} categories`}>{categories.map(item => <button key={item.key} className={category === item.key ? "chosen" : ""} onClick={() => setCategory(item.key)}>{item.label}</button>)}</div>}{loading ? <div className="panel discover-loading">Finding great titles…</div> : titles.length ? <><div className="discover-grid live-discover-grid">{titles.map((title, index) => <article className="media-card" key={`${title.type}-${title.id}`}><button className={`cover ${["a", "b", "c", "d", "e"][index % 5]}`} onClick={() => onOpen(title.title, `${title.year ?? "—"} · ${title.type === "tv" ? "TV series" : "Movie"}`, title.score)}>{title.image && <img src={title.image} alt={`${title.title} poster`} />}<span className="cover-type">{title.type === "tv" ? "TV" : "Movie"}</span><span className="cover-score">★ {title.score}</span><span className="cover-title"><small>{title.year ?? "New release"}</small>{title.title}</span></button><strong>{title.title}</strong><span>{title.type === "tv" ? "TV series" : "Movie"} · TMDB {title.score}</span></article>)}</div><div className="discover-more" ref={sentinel}>{loadingMore ? "Loading more great picks…" : hasMore ? "Keep scrolling for more" : "You’ve reached the end for now."}</div>{hasMore && !loadingMore && <button className="secondary discover-more-button" onClick={() => void loadMore()}>Load more</button>}</> : <div className="panel discover-empty"><b>Live titles are not available just now.</b><p>Try using the search at the top to find a movie, show, actor, or actress.</p></div>}</section>;
 }
 
-type DiscoverResume = { filter: "all" | "movie" | "tv"; category: string; titles: DiscoverTitle[]; nextPage: number; hasMore: boolean; scrollY: number };
+type DiscoverResume = { filter: "all" | "movie" | "tv"; category: string; yearFrom?: number | null; yearTo?: number | null; titles: DiscoverTitle[]; nextPage: number; hasMore: boolean; scrollY: number };
 
 function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string, meta?: string, score?: string, tmdbId?: number, type?: "movie" | "tv") => void; resume: DiscoverResume | null; onSnapshot: (snapshot: DiscoverResume) => void }) {
   const [filter, setFilter] = useState<"all" | "movie" | "tv">(() => resume?.filter ?? "all");
   const [category, setCategory] = useState(() => resume?.category ?? "all");
+  const [yearFrom, setYearFrom] = useState<number | null>(() => resume?.yearFrom ?? null);
+  const [yearTo, setYearTo] = useState<number | null>(() => resume?.yearTo ?? null);
+  const [releaseYearOpen, setReleaseYearOpen] = useState(false);
   const [titles, setTitles] = useState<DiscoverTitle[]>(() => resume?.titles ?? []);
   const [loading, setLoading] = useState(() => !resume?.titles.length);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -664,7 +667,13 @@ function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string,
   const [restoring, setRestoring] = useState(() => Boolean(resume?.titles.length));
   const sentinel = useRef<HTMLDivElement | null>(null);
   const country = () => navigator.language.split("-")[1]?.toUpperCase() === "CA" ? "CA" : "US";
-  const fetchTitles = async (page: number) => { const response = await fetch(`/api/tmdb?mode=discover&type=${filter}&category=${category}&country=${country()}&page=${page}`); return response.ok ? await response.json() as { titles?: DiscoverTitle[]; hasMore?: boolean } : { titles: [], hasMore: false }; };
+  const fetchTitles = async (page: number) => {
+    const query = new URLSearchParams({ mode: "discover", type: filter, category, country: country(), page: String(page) });
+    if (yearFrom !== null) query.set("yearFrom", String(yearFrom));
+    if (yearTo !== null) query.set("yearTo", String(yearTo));
+    const response = await fetch(`/api/tmdb?${query.toString()}`);
+    return response.ok ? await response.json() as { titles?: DiscoverTitle[]; hasMore?: boolean } : { titles: [], hasMore: false };
+  };
   useEffect(() => {
     if (restoring) {
       const frame = window.requestAnimationFrame(() => window.scrollTo(0, resume?.scrollY ?? 0));
@@ -675,26 +684,51 @@ function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string,
     setLoading(true); setTitles([]); setHasMore(true); setNextPage(2); window.scrollTo(0, 0);
     void fetchTitles(1).then(data => { if (active) { setTitles(data.titles ?? []); setHasMore(Boolean(data.hasMore)); } }).catch(() => { if (active) { setTitles([]); setHasMore(false); } }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [filter, category]);
+  }, [filter, category, yearFrom, yearTo]);
   const loadMore = async () => { if (loading || loadingMore || !hasMore) return; setLoadingMore(true); try { const data = await fetchTitles(nextPage); const more = data.titles ?? []; setTitles(current => { const existing = new Set(current.map(title => `${title.type}-${title.id}`)); return [...current, ...more.filter(title => !existing.has(`${title.type}-${title.id}`))]; }); setHasMore(Boolean(data.hasMore) && more.length > 0); setNextPage(current => current + 1); } catch { setHasMore(false); } finally { setLoadingMore(false); } };
   useEffect(() => { const node = sentinel.current; if (!node || !hasMore || loading) return; const observer = new IntersectionObserver(entries => { if (entries[0]?.isIntersecting) void loadMore(); }, { rootMargin: "420px" }); observer.observe(node); return () => observer.disconnect(); }, [hasMore, loading, loadingMore, nextPage, titles.length]);
   const rememberAndOpen = (title: DiscoverTitle) => {
-    onSnapshot({ filter, category, titles, nextPage, hasMore, scrollY: window.scrollY });
+    onSnapshot({ filter, category, yearFrom, yearTo, titles, nextPage, hasMore, scrollY: window.scrollY });
     const slug = title.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     window.location.assign(`/${title.type}/${title.id}-${slug}`);
   };
   const filters = [{ key: "all", label: "Popular now" }, { key: "movie", label: "Movies" }, { key: "tv", label: "TV shows" }] as const;
   const categories = filter === "movie" ? [
-    { key: "all", label: "All movies" }, { key: "new", label: "New releases" }, { key: "past6months", label: "Past 6 months" }, { key: "pastyear", label: "Past year" }, { key: "upcoming", label: "Coming soon" },
+    { key: "all", label: "All movies" }, { key: "upcoming", label: "Coming soon" },
     { key: "action", label: "Action" }, { key: "adventure", label: "Adventure" }, { key: "comedy", label: "Comedy" }, { key: "drama", label: "Drama" }, { key: "thriller", label: "Thriller" }, { key: "crime", label: "Crime" },
     { key: "horror", label: "Horror" }, { key: "scifi", label: "Sci-fi" }, { key: "fantasy", label: "Fantasy" }, { key: "romance", label: "Romance" }, { key: "animation", label: "Animation" }, { key: "family", label: "Family" }, { key: "documentary", label: "Documentary" },
   ] : [
-    { key: "all", label: "All shows" }, { key: "new", label: "New releases" }, { key: "upcoming", label: "Coming soon" },
+    { key: "all", label: "All shows" }, { key: "upcoming", label: "Coming soon" },
     { key: "drama", label: "Drama" }, { key: "comedy", label: "Comedy" }, { key: "crime", label: "Crime" }, { key: "thriller", label: "Mystery & thriller" }, { key: "action", label: "Action & adventure" },
     { key: "scifi", label: "Sci-fi & fantasy" }, { key: "animation", label: "Animation" }, { key: "documentary", label: "Documentary" }, { key: "kids", label: "Kids & family" }, { key: "reality", label: "Reality TV" },
   ];
-  const subtitle = category === "upcoming" ? `Upcoming ${filter === "tv" ? "series" : "movies"} ordered by their nearest release date.` : category === "past6months" ? "Movies released in the past six months, newest first." : category === "pastyear" ? "Movies released in the past year, newest first." : category === "new" ? `Recently released ${filter === "tv" ? "series" : "movies"} you can look for now.` : category === "reality" ? "Reality TV only, kept separate from scripted series." : filter === "all" ? "Popular English-language movies and scripted series for your region." : filter === "movie" ? "Popular English-language movies to save for your next night in." : "Popular scripted series ready for your next binge.";
-  return <section className="page live-discover"><Intro label="DISCOVER" title="Find your next obsession." text={subtitle} action={null}/><div className="tabs discover-tabs">{filters.map(item => <button key={item.key} className={filter === item.key ? "chosen" : ""} onClick={() => { setFilter(item.key); setCategory("all"); }}>{item.label}</button>)}</div>{filter !== "all" && <div className="genre-chips" aria-label={`${filter === "movie" ? "Movie" : "TV show"} categories`}>{categories.map(item => <button key={item.key} className={category === item.key ? "chosen" : ""} onClick={() => setCategory(item.key)}>{item.label}</button>)}</div>}{loading ? <div className="panel discover-loading">Finding great titles…</div> : titles.length ? <><div className="discover-grid live-discover-grid">{titles.map((title, index) => <article className="media-card" key={`${title.type}-${title.id}`}><button className={`cover ${["a", "b", "c", "d", "e"][index % 5]}`} onClick={() => rememberAndOpen(title)}>{title.image && <img src={title.image} alt={`${title.title} poster`} />}<span className="cover-type">{title.type === "tv" ? "TV" : "Movie"}</span><span className="cover-score">★ {title.score}</span><span className="cover-title"><small>{title.year ?? "New release"}</small>{title.title}</span></button><strong>{title.title}</strong><span>{title.type === "tv" ? "TV series" : "Movie"} · TMDB {title.score}</span></article>)}</div><div className="discover-more" ref={sentinel}>{loadingMore ? "Loading more great picks…" : hasMore ? "Keep scrolling for more" : "You’ve reached the end for now."}</div>{hasMore && !loadingMore && <button className="secondary discover-more-button" onClick={() => void loadMore()}>Load more</button>}</> : <div className="panel discover-empty"><b>Live titles are not available just now.</b><p>Try using the search at the top to find a movie, show, actor, or actress.</p></div>}</section>;
+  const firstReleaseYear = 1900;
+  const latestReleaseYear = new Date().getFullYear();
+  const selectedYearFrom = yearFrom ?? firstReleaseYear;
+  const selectedYearTo = yearTo ?? latestReleaseYear;
+  const hasYearRange = yearFrom !== null || yearTo !== null;
+  const yearLabel = !hasYearRange ? "Release year" : selectedYearFrom === selectedYearTo ? String(selectedYearFrom) : `${selectedYearFrom}–${selectedYearTo}`;
+  const chooseYearFrom = (value: number) => { setYearFrom(Math.min(value, selectedYearTo)); setYearTo(current => current ?? latestReleaseYear); };
+  const chooseYearTo = (value: number) => { setYearFrom(current => current ?? firstReleaseYear); setYearTo(Math.max(value, selectedYearFrom)); };
+  const chooseSingleYear = (year: number) => { setYearFrom(year); setYearTo(year); };
+  const subtitle = hasYearRange ? `${filter === "tv" ? "Series" : filter === "movie" ? "Movies" : "Movies and series"} released ${selectedYearFrom === selectedYearTo ? `in ${selectedYearFrom}` : `from ${selectedYearFrom} to ${selectedYearTo}`}, newest first.` : category === "upcoming" ? `Upcoming ${filter === "tv" ? "series" : "movies"} ordered by their nearest release date.` : category === "reality" ? "Reality TV only, kept separate from scripted series." : filter === "all" ? "Popular English-language movies and scripted series for your region." : filter === "movie" ? "Popular English-language movies to save for your next night in." : "Popular scripted series ready for your next binge.";
+  return <section className="page live-discover">
+    <Intro label="DISCOVER" title="Find your next obsession." text={subtitle} action={null}/>
+    <div className="discover-navigation">
+      <div className="tabs discover-tabs">{filters.map(item => <button key={item.key} className={filter === item.key ? "chosen" : ""} onClick={() => { setFilter(item.key); setCategory("all"); }}>{item.label}</button>)}</div>
+      <div className="release-year-control">
+        <button type="button" className={`release-year-toggle${hasYearRange ? " selected" : ""}`} aria-expanded={releaseYearOpen} aria-controls="release-year-panel" onClick={() => setReleaseYearOpen(open => !open)}><span>{yearLabel}</span><i aria-hidden="true">⌄</i></button>
+        {releaseYearOpen && <div className="release-year-panel" id="release-year-panel">
+          <div className="release-year-panel-head"><b>Release year</b><button type="button" onClick={() => { setYearFrom(null); setYearTo(null); }}>× Reset</button></div>
+          <div className="release-year-values"><span>{selectedYearFrom}</span><span>{selectedYearTo}</span></div>
+          <div className="release-year-range"><input type="range" min={firstReleaseYear} max={latestReleaseYear} value={selectedYearFrom} aria-label="Earliest release year" onChange={event => chooseYearFrom(Number(event.target.value))}/><input type="range" min={firstReleaseYear} max={latestReleaseYear} value={selectedYearTo} aria-label="Latest release year" onChange={event => chooseYearTo(Number(event.target.value))}/></div>
+          <div className="release-year-shortcuts"><button type="button" className={selectedYearFrom === latestReleaseYear && selectedYearTo === latestReleaseYear ? "chosen" : ""} onClick={() => chooseSingleYear(latestReleaseYear)}>This year</button><button type="button" className={selectedYearFrom === latestReleaseYear - 1 && selectedYearTo === latestReleaseYear - 1 ? "chosen" : ""} onClick={() => chooseSingleYear(latestReleaseYear - 1)}>Last year</button></div>
+        </div>}
+      </div>
+    </div>
+    {filter !== "all" && <div className="genre-chips" aria-label={`${filter === "movie" ? "Movie" : "TV show"} categories`}>{categories.map(item => <button key={item.key} className={category === item.key ? "chosen" : ""} onClick={() => setCategory(item.key)}>{item.label}</button>)}</div>}
+    {loading ? <div className="panel discover-loading">Finding great titles…</div> : titles.length ? <><div className="discover-grid live-discover-grid">{titles.map((title, index) => <article className="media-card" key={`${title.type}-${title.id}`}><button className={`cover ${["a", "b", "c", "d", "e"][index % 5]}`} onClick={() => rememberAndOpen(title)}>{title.image && <img src={title.image} alt={`${title.title} poster`} />}<span className="cover-type">{title.type === "tv" ? "TV" : "Movie"}</span><span className="cover-score">★ {title.score}</span><span className="cover-title"><small>{title.year ?? "New release"}</small>{title.title}</span></button><strong>{title.title}</strong><span>{title.type === "tv" ? "TV series" : "Movie"} · TMDB {title.score}</span></article>)}</div><div className="discover-more" ref={sentinel}>{loadingMore ? "Loading more great picks…" : hasMore ? "Keep scrolling for more" : "You’ve reached the end for now."}</div>{hasMore && !loadingMore && <button className="secondary discover-more-button" onClick={() => void loadMore()}>Load more</button>}</> : <div className="panel discover-empty"><b>Live titles are not available just now.</b><p>Try using the search at the top to find a movie, show, actor, or actress.</p></div>}
+  </section>;
 }
 
 type CircleFriend = { id: string; displayName: string; avatarUrl: string | null; bio: string | null; unreadMessages?: boolean };

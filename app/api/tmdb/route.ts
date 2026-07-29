@@ -55,6 +55,16 @@ export async function GET(request: Request) {
     if (mode === "discover") {
       const requestedType = params.get("type");
       const category = params.get("category") ?? "all";
+      const currentYear = new Date().getUTCFullYear();
+      const parseReleaseYear = (value: string | null) => {
+        const year = Number(value);
+        return Number.isInteger(year) && year >= 1900 && year <= currentYear ? year : null;
+      };
+      const requestedYearFrom = parseReleaseYear(params.get("yearFrom"));
+      const requestedYearTo = parseReleaseYear(params.get("yearTo"));
+      const yearFrom = requestedYearFrom !== null && requestedYearTo !== null ? Math.min(requestedYearFrom, requestedYearTo) : requestedYearFrom;
+      const yearTo = requestedYearFrom !== null && requestedYearTo !== null ? Math.max(requestedYearFrom, requestedYearTo) : requestedYearTo;
+      const hasReleaseYearFilter = yearFrom !== null || yearTo !== null;
       const headers = { Authorization: `Bearer ${token}`, accept: "application/json" };
       const endpoints = requestedType === "movie" ? [{ path: "/discover/movie", type: "movie" as const }]
         : requestedType === "tv" ? [{ path: "/discover/tv", type: "tv" as const }]
@@ -96,7 +106,11 @@ export async function GET(request: Request) {
             url.searchParams.set("with_runtime.gte", "70");
           }
         }
-        if (category === "new" || category === "past6months" || category === "pastyear") {
+        if (hasReleaseYearFilter) {
+          url.searchParams.set("sort_by", `${dateField}.desc`);
+          if (yearFrom !== null) url.searchParams.set(`${dateField}.gte`, `${yearFrom}-01-01`);
+          if (yearTo !== null) url.searchParams.set(`${dateField}.lte`, `${yearTo}-12-31`);
+        } else if (category === "new" || category === "past6months" || category === "pastyear") {
           const date = new Date();
           // "New releases" should feel like the things people are actually
           // hearing about, not every low-traffic title added this week.
@@ -131,7 +145,7 @@ export async function GET(request: Request) {
         releaseDate: item.release_date ?? item.first_air_date ?? "",
         image: poster(item.poster_path), score: item.vote_average ? item.vote_average.toFixed(1) : "—",
       })));
-      const byDate = category === "new" || category === "past6months" || category === "pastyear" || category === "upcoming";
+      const byDate = hasReleaseYearFilter || category === "new" || category === "past6months" || category === "pastyear" || category === "upcoming";
       const sorted = titledResults.sort((a, b) => byDate ? (category === "upcoming" ? a.releaseDate.localeCompare(b.releaseDate) : b.releaseDate.localeCompare(a.releaseDate)) : Number(b.score) - Number(a.score));
       const titles = sorted.slice(0, 24).map(({ releaseDate: _releaseDate, ...title }) => title);
       return Response.json({ titles, page, hasMore: collections.some(collection => page < collection.totalPages) }, { headers: { "Cache-Control": "public, max-age=900, s-maxage=21600" } });
