@@ -658,6 +658,8 @@ function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string,
   const [category, setCategory] = useState(() => resume?.category ?? "all");
   const [yearFrom, setYearFrom] = useState<number | null>(() => resume?.yearFrom ?? null);
   const [yearTo, setYearTo] = useState<number | null>(() => resume?.yearTo ?? null);
+  const [draftYearFrom, setDraftYearFrom] = useState<number | null>(() => resume?.yearFrom ?? null);
+  const [draftYearTo, setDraftYearTo] = useState<number | null>(() => resume?.yearTo ?? null);
   const [releaseYearOpen, setReleaseYearOpen] = useState(false);
   const [titles, setTitles] = useState<DiscoverTitle[]>(() => resume?.titles ?? []);
   const [loading, setLoading] = useState(() => !resume?.titles.length);
@@ -689,8 +691,7 @@ function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string,
   useEffect(() => { const node = sentinel.current; if (!node || !hasMore || loading) return; const observer = new IntersectionObserver(entries => { if (entries[0]?.isIntersecting) void loadMore(); }, { rootMargin: "420px" }); observer.observe(node); return () => observer.disconnect(); }, [hasMore, loading, loadingMore, nextPage, titles.length]);
   const rememberAndOpen = (title: DiscoverTitle) => {
     onSnapshot({ filter, category, yearFrom, yearTo, titles, nextPage, hasMore, scrollY: window.scrollY });
-    const slug = title.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    window.location.assign(`/${title.type}/${title.id}-${slug}`);
+    onOpen(title.title, `${title.year ?? "—"} · ${title.type === "tv" ? "TV series" : "Movie"}`, title.score, title.id, title.type);
   };
   const filters = [{ key: "all", label: "Popular now" }, { key: "movie", label: "Movies" }, { key: "tv", label: "TV shows" }] as const;
   const categories = filter === "movie" ? [
@@ -704,14 +705,19 @@ function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string,
   ];
   const firstReleaseYear = 1900;
   const latestReleaseYear = new Date().getFullYear();
-  const selectedYearFrom = yearFrom ?? firstReleaseYear;
-  const selectedYearTo = yearTo ?? latestReleaseYear;
-  const hasYearRange = yearFrom !== null || yearTo !== null;
+  const selectedYearFrom = draftYearFrom ?? firstReleaseYear;
+  const selectedYearTo = draftYearTo ?? latestReleaseYear;
+  const activeYearFrom = yearFrom ?? firstReleaseYear;
+  const activeYearTo = yearTo ?? latestReleaseYear;
+  const hasYearRange = draftYearFrom !== null || draftYearTo !== null;
+  const hasActiveYearRange = yearFrom !== null || yearTo !== null;
   const yearLabel = !hasYearRange ? "Release year" : selectedYearFrom === selectedYearTo ? String(selectedYearFrom) : `${selectedYearFrom}–${selectedYearTo}`;
-  const chooseYearFrom = (value: number) => { setYearFrom(Math.min(value, selectedYearTo)); setYearTo(current => current ?? latestReleaseYear); };
-  const chooseYearTo = (value: number) => { setYearFrom(current => current ?? firstReleaseYear); setYearTo(Math.max(value, selectedYearFrom)); };
-  const chooseSingleYear = (year: number) => { setYearFrom(year); setYearTo(year); };
-  const subtitle = hasYearRange ? `${filter === "tv" ? "Series" : filter === "movie" ? "Movies" : "Movies and series"} released ${selectedYearFrom === selectedYearTo ? `in ${selectedYearFrom}` : `from ${selectedYearFrom} to ${selectedYearTo}`}, newest first.` : category === "upcoming" ? `Upcoming ${filter === "tv" ? "series" : "movies"} ordered by their nearest release date.` : category === "reality" ? "Reality TV only, kept separate from scripted series." : filter === "all" ? "Popular English-language movies and scripted series for your region." : filter === "movie" ? "Popular English-language movies to save for your next night in." : "Popular scripted series ready for your next binge.";
+  const chooseYearFrom = (value: number) => { setDraftYearFrom(Math.min(value, selectedYearTo)); setDraftYearTo(current => current ?? latestReleaseYear); };
+  const chooseYearTo = (value: number) => { setDraftYearFrom(current => current ?? firstReleaseYear); setDraftYearTo(Math.max(value, selectedYearFrom)); };
+  const applyYearRange = () => { setYearFrom(draftYearFrom); setYearTo(draftYearTo); };
+  const resetYearRange = () => { setDraftYearFrom(null); setDraftYearTo(null); setYearFrom(null); setYearTo(null); };
+  const chooseSingleYear = (year: number) => { setDraftYearFrom(year); setDraftYearTo(year); setYearFrom(year); setYearTo(year); };
+  const subtitle = hasActiveYearRange ? `${filter === "tv" ? "Series" : filter === "movie" ? "Movies" : "Movies and series"} released ${activeYearFrom === activeYearTo ? `in ${activeYearFrom}` : `from ${activeYearFrom} to ${activeYearTo}`}, highest rated first.` : category === "upcoming" ? `Upcoming ${filter === "tv" ? "series" : "movies"} ordered by their nearest release date.` : category === "reality" ? "Highest-rated reality TV, kept separate from scripted series." : filter === "all" ? "Highest-rated English-language movies and scripted series for your region." : filter === "movie" ? "Highest-rated English-language movies to save for your next night in." : "Highest-rated scripted series ready for your next binge.";
   return <section className="page live-discover">
     <Intro label="DISCOVER" title="Find your next obsession." text={subtitle} action={null}/>
     <div className="discover-navigation">
@@ -719,9 +725,9 @@ function DiscoverPage({ onOpen, resume, onSnapshot }: { onOpen: (title?: string,
       <div className="release-year-control">
         <button type="button" className={`release-year-toggle${hasYearRange ? " selected" : ""}`} aria-expanded={releaseYearOpen} aria-controls="release-year-panel" onClick={() => setReleaseYearOpen(open => !open)}><span>{yearLabel}</span><i aria-hidden="true">⌄</i></button>
         {releaseYearOpen && <div className="release-year-panel" id="release-year-panel">
-          <div className="release-year-panel-head"><b>Release year</b><button type="button" onClick={() => { setYearFrom(null); setYearTo(null); }}>× Reset</button></div>
+          <div className="release-year-panel-head"><b>Release year</b><button type="button" onClick={resetYearRange}>× Reset</button></div>
           <div className="release-year-values"><span>{selectedYearFrom}</span><span>{selectedYearTo}</span></div>
-          <div className="release-year-range"><input type="range" min={firstReleaseYear} max={latestReleaseYear} value={selectedYearFrom} aria-label="Earliest release year" onChange={event => chooseYearFrom(Number(event.target.value))}/><input type="range" min={firstReleaseYear} max={latestReleaseYear} value={selectedYearTo} aria-label="Latest release year" onChange={event => chooseYearTo(Number(event.target.value))}/></div>
+          <div className="release-year-range"><input type="range" min={firstReleaseYear} max={latestReleaseYear} value={selectedYearFrom} aria-label="Earliest release year" onChange={event => chooseYearFrom(Number(event.target.value))} onPointerUp={applyYearRange} onPointerCancel={applyYearRange} onBlur={applyYearRange}/><input type="range" min={firstReleaseYear} max={latestReleaseYear} value={selectedYearTo} aria-label="Latest release year" onChange={event => chooseYearTo(Number(event.target.value))} onPointerUp={applyYearRange} onPointerCancel={applyYearRange} onBlur={applyYearRange}/></div>
           <div className="release-year-shortcuts"><button type="button" className={selectedYearFrom === latestReleaseYear && selectedYearTo === latestReleaseYear ? "chosen" : ""} onClick={() => chooseSingleYear(latestReleaseYear)}>This year</button><button type="button" className={selectedYearFrom === latestReleaseYear - 1 && selectedYearTo === latestReleaseYear - 1 ? "chosen" : ""} onClick={() => chooseSingleYear(latestReleaseYear - 1)}>Last year</button></div>
         </div>}
       </div>

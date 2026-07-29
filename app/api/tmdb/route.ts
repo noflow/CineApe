@@ -74,9 +74,10 @@ export async function GET(request: Request) {
         url.searchParams.set("language", "en-US");
         url.searchParams.set("page", String(page));
         url.searchParams.set("region", country);
-        url.searchParams.set("sort_by", "popularity.desc");
+        url.searchParams.set("sort_by", "vote_average.desc");
         url.searchParams.set("with_original_language", "en");
         url.searchParams.set("include_adult", "false");
+        if (category !== "upcoming") url.searchParams.set("vote_count.gte", "100");
         const today = new Date().toISOString().slice(0, 10);
         const tomorrow = new Date(Date.now() + 1000 * 60 * 60 * 24).toISOString().slice(0, 10);
         const dateField = endpoint.type === "movie" ? "primary_release_date" : "first_air_date";
@@ -107,7 +108,7 @@ export async function GET(request: Request) {
           }
         }
         if (hasReleaseYearFilter) {
-          url.searchParams.set("sort_by", `${dateField}.desc`);
+          url.searchParams.set("sort_by", "vote_average.desc");
           if (yearFrom !== null) url.searchParams.set(`${dateField}.gte`, `${yearFrom}-01-01`);
           if (yearTo !== null) url.searchParams.set(`${dateField}.lte`, `${yearTo}-12-31`);
         } else if (category === "new" || category === "past6months" || category === "pastyear") {
@@ -145,8 +146,7 @@ export async function GET(request: Request) {
         releaseDate: item.release_date ?? item.first_air_date ?? "",
         image: poster(item.poster_path), score: item.vote_average ? item.vote_average.toFixed(1) : "—",
       })));
-      const byDate = hasReleaseYearFilter || category === "new" || category === "past6months" || category === "pastyear" || category === "upcoming";
-      const sorted = titledResults.sort((a, b) => byDate ? (category === "upcoming" ? a.releaseDate.localeCompare(b.releaseDate) : b.releaseDate.localeCompare(a.releaseDate)) : Number(b.score) - Number(a.score));
+      const sorted = titledResults.sort((a, b) => category === "upcoming" ? a.releaseDate.localeCompare(b.releaseDate) : (Number(b.score) || 0) - (Number(a.score) || 0));
       const titles = sorted.slice(0, 24).map(({ releaseDate: _releaseDate, ...title }) => title);
       return Response.json({ titles, page, hasMore: collections.some(collection => page < collection.totalPages) }, { headers: { "Cache-Control": "public, max-age=900, s-maxage=21600" } });
     }
