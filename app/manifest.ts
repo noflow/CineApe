@@ -10,8 +10,8 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f7f7fa",
     theme_color: "#6e4df6",
     icons: [
-      { src: "/cineape-pwa-192.png?v=3", sizes: "192x192", type: "image/png", purpose: "any" },
-      { src: "/cineape-pwa-512.png?v=3", sizes: "512x512", type: "image/png", purpose: "any" },
+      { src: "/cineape-pwa-192.png?v=4", sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: "/cineape-pwa-512.png?v=4", sizes: "512x512", type: "image/png", purpose: "any" },
     ],
   };
 }

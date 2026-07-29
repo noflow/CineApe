@@ -15,8 +15,12 @@ export const metadata: Metadata = {
     title: "CineApe",
   },
   icons: {
-    icon: "/cineape-browser-tab.png",
-    apple: "/cineape-apple-touch-icon.png?v=3",
+    icon: [
+      { url: "/cineape-pwa-192.png?v=4", sizes: "192x192", type: "image/png" },
+      { url: "/cineape-pwa-512.png?v=4", sizes: "512x512", type: "image/png" },
+    ],
+    shortcut: "/cineape-pwa-192.png?v=4",
+    apple: "/cineape-apple-touch-icon.png?v=4",
   },
 };
 
